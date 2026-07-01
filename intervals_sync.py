@@ -112,7 +112,13 @@ def emoji(t):
             "Swim":"🏊","WeightTraining":"🏋️","Workout":"💪","NordicSki":"⛷️"}.get(t,"🏅")
 
 def safe_name(s):
-    return "".join(c if c.isalnum() or c in " -_" else "_" for c in s)
+    import unicodedata
+    def keep(c):
+        if c.isalnum() or c in " -_":
+            return True
+        cat = unicodedata.category(c)
+        return cat in ("So", "Sm", "Sk", "Sc")  # emoji i symbole Unicode
+    return "".join(c if keep(c) else "_" for c in s)
 
 def scan_existing_notes():
     """Mapa {activity_id: relpath} z frontmattera istniejących notatek.
