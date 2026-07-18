@@ -196,7 +196,7 @@ def _metric_bullets(series: WellnessSeries, year: int, week_num: int) -> list[st
     wow_value = week_over_week_load(series, year, week_num)
     if wow_value is not None:
         bullets.append(
-            f"- **Week-over-week load:** {_format_ramp(wow_value)}% "
+            f"- **Week-over-week load:** {_format_ramp(int(wow_value))}% "
             f"{week_over_week_label(wow_value)}"
         )
     monotony_strain = monotony_and_strain(series, year, week_num)
