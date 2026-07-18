@@ -36,7 +36,9 @@ def fetch_weather(lat: float, lon: float, start_iso: str) -> dict[str, float] | 
         hourly = weather_payload.get("hourly", {})
         times = hourly.get("time", [])
         target = start_dt.strftime("%Y-%m-%dT%H:00")
-        idx = next((i for i, t in enumerate(times) if t == target), None)
+        idx = next(
+            (idx for idx, timestamp in enumerate(times) if timestamp == target), None
+        )
         if idx is None:
             return None
         return {

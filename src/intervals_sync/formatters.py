@@ -64,7 +64,7 @@ def sanitize_filename(text: str) -> str:
         cat = unicodedata.category(c)
         return cat in ("So", "Sm", "Sk", "Sc")
 
-    return "".join(c if keep(c) else "_" for c in text)
+    return "".join(char if keep(char) else "_" for char in text)
 
 
 def get_field(activity: Mapping[str, Any], key: str, default: Any = None) -> Any:

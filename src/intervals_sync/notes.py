@@ -54,7 +54,7 @@ def activity_note(
     intensity = get_field(activity, "icu_intensity")
     variability = get_field(activity, "icu_variability_index")
     decoupling = get_field(activity, "decoupling")
-    ef = get_field(activity, "icu_efficiency_factor")
+    efficiency_factor = get_field(activity, "icu_efficiency_factor")
     polarization = get_field(activity, "polarization_index")
 
     ctl = get_field(activity, "icu_ctl")
@@ -212,7 +212,10 @@ def activity_note(
                     "Session Intensity",
                     f"{round(intensity, 1)}%" if intensity else None,
                 ),
-                format_markdown_row("Efficiency Factor", round(ef, 2) if ef else None),
+                format_markdown_row(
+                    "Efficiency Factor",
+                    round(efficiency_factor, 2) if efficiency_factor else None,
+                ),
                 format_markdown_row(
                     "Decoupling", f"{round(decoupling, 1)}%" if decoupling else None
                 ),
@@ -346,12 +349,18 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
     week_start = date.fromisocalendar(year, week_num, 1)  # Monday of the ISO week
     week_end = week_start + timedelta(days=6)
 
-    total_dist = sum((a.get("distance", 0) or 0) for a in week_acts) / 1000
-    total_time = sum((a.get("moving_time", 0) or 0) for a in week_acts)
-    total_elev = sum(int(a.get("total_elevation_gain", 0) or 0) for a in week_acts)
-    total_load = sum((a.get("icu_training_load", 0) or 0) for a in week_acts)
-    total_trimp = sum((a.get("trimp", 0) or 0) for a in week_acts)
-    total_cal = sum((a.get("calories", 0) or 0) for a in week_acts)
+    total_dist = (
+        sum((activity.get("distance", 0) or 0) for activity in week_acts) / 1000
+    )
+    total_time = sum((activity.get("moving_time", 0) or 0) for activity in week_acts)
+    total_elev = sum(
+        int(activity.get("total_elevation_gain", 0) or 0) for activity in week_acts
+    )
+    total_load = sum(
+        (activity.get("icu_training_load", 0) or 0) for activity in week_acts
+    )
+    total_trimp = sum((activity.get("trimp", 0) or 0) for activity in week_acts)
+    total_cal = sum((activity.get("calories", 0) or 0) for activity in week_acts)
 
     # CTL/ATL from the last activity of the week
     sorted_acts = sorted(

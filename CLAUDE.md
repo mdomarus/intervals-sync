@@ -49,6 +49,10 @@ src/intervals_sync/
 - **Weather**: skipped for indoor types (`WeightTraining`, `Workout`, `VirtualRide`, `Swim`) and activities older than 92 days.
 - **Type checker**: `ty` (Astral), not mypy. Ignore `.mypy_cache` if present.
 
+## Git
+
+- **Never add Claude as a commit author.** Do not append `Co-Authored-By: Claude` or any Anthropic/Claude attribution to commit messages.
+
 ## Code style
 
 - **Meaningful names**: every variable, parameter, and function must be named for what it represents — no `data`, `res`, `tmp`, `val`, `item`, `x`.
