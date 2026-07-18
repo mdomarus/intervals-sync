@@ -4,6 +4,7 @@ from intervals_sync.formatters import (
     hr_zones_summary,
     iso_year_week,
     mps_to_kmh,
+    pace_zones_summary,
     sanitize_filename,
 )
 
@@ -76,6 +77,30 @@ class TestSanitizeFilename:
         # Mn, not kept) → the selector becomes "_". Documents existing behavior
         # that on-disk filenames already rely on.
         assert sanitize_filename("🏔️") == "🏔_"
+
+
+class TestPaceZonesSummary:
+    def test_returns_none_without_data(self) -> None:
+        assert pace_zones_summary(None, None) is None
+        assert pace_zones_summary([], []) is None
+
+    def test_returns_none_when_all_zero(self) -> None:
+        assert pace_zones_summary([0, 0, 0], [3.0, 3.5, 4.0]) is None
+
+    def test_formats_zones_with_limits(self) -> None:
+        # Z1: lower bound 3.0 m/s → pace = 1000/3.0 s/km = 333s → 5:33 /km
+        # Z2: lower bound 3.5 m/s → pace = 1000/3.5 s/km ≈ 286s → 4:46 /km
+        # 600s in Z1, 1800s in Z2 → 25% / 75%
+        result = pace_zones_summary([600, 1800], [3.0, 3.5])
+        assert result == "Z1 (<5:33 /km): 10min (25%) | Z2 (<4:46 /km): 30min (75%)"
+
+    def test_formats_zones_without_limits(self) -> None:
+        result = pace_zones_summary([600, 1800], None)
+        assert result == "Z1: 10min (25%) | Z2: 30min (75%)"
+
+    def test_skips_zero_time_zones(self) -> None:
+        result = pace_zones_summary([0, 1800, 600], [3.0, 3.5, 4.0])
+        assert result == "Z2 (<4:46 /km): 30min (75%) | Z3 (<4:10 /km): 10min (25%)"
 
 
 class TestHrZonesSummary:
