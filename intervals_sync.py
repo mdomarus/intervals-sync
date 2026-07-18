@@ -9,7 +9,7 @@ import glob
 import re
 from datetime import datetime, timedelta, date
 from weather import fetch_weather
-from state import load_state, save_state
+from state import load_state, save_state, State
 
 
 def _load_secrets() -> tuple[str, str, str, str]:
@@ -41,7 +41,9 @@ DEFAULT_LAT, DEFAULT_LON = (
 )  # Gdynia — fallback gdy aktywność nie ma GPS
 
 
-def write_text_safe(path, content, retries=4, delay=1.5):
+def write_text_safe(
+    path: str, content: str, retries: int = 4, delay: float = 1.5
+) -> bool:
     """Atomowy, odporny na iCloud zapis pliku.
 
     Pisze do pliku tymczasowego w tym samym katalogu i podmienia przez
@@ -78,7 +80,7 @@ def get_creds() -> str:
     return base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
 
 
-def get_headers():
+def get_headers() -> dict[str, str]:
     return {
         "Authorization": f"Basic {get_creds()}",
         "Accept": "application/json",
@@ -86,7 +88,7 @@ def get_headers():
     }
 
 
-def api_get(path: str):
+def api_get(path: str) -> list | dict:
     url = f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}"
     req = urllib.request.Request(
         url,
@@ -96,7 +98,7 @@ def api_get(path: str):
         return json.loads(resp.read())
 
 
-def get_activity(act_id: str):
+def get_activity(act_id: str) -> dict | None:
     """Świeży pojedynczy rekord aktywności (np. po zmianie ustawień serwerowych)."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}"
@@ -137,7 +139,7 @@ def set_elevation_correction(act_id: str, value: bool) -> bool:
         return False
 
 
-def hms(s) -> str:
+def hms(s: int | float | None) -> str:
     if not s:
         return "—"
     s = int(s)
@@ -146,7 +148,7 @@ def hms(s) -> str:
     return f"{h}:{m:02d}:{sec:02d}"
 
 
-def pace(dist_m, time_s):
+def pace(dist_m: float | None, time_s: float | None) -> str | None:
     if not dist_m or not time_s:
         return None
     ps = time_s / (dist_m / 1000)
@@ -154,13 +156,13 @@ def pace(dist_m, time_s):
     return f"{m}:{s:02d} /km"
 
 
-def speed_kmh(mps):
+def speed_kmh(mps: float | None) -> float | None:
     if not mps:
         return None
     return round(mps * 3.6, 1)
 
 
-def emoji(t):
+def emoji(t: str) -> str:
     return {
         "Run": "🏃",
         "TrailRun": "🏔️",
@@ -177,7 +179,7 @@ def emoji(t):
     }.get(t, "🏅")
 
 
-def safe_name(text: str):
+def safe_name(text: str) -> str:
     import unicodedata
 
     def keep(c):
@@ -189,7 +191,7 @@ def safe_name(text: str):
     return "".join(c if keep(c) else "_" for c in text)
 
 
-def scan_existing_notes():
+def scan_existing_notes() -> dict[str, str]:
     """Mapa {activity_id: relpath} z frontmattera istniejących notatek.
 
     Dysk jest źródłem prawdy dla wykrywania zmiany nazwy i kolizji — ID siedzi
@@ -208,18 +210,18 @@ def scan_existing_notes():
     return out
 
 
-def val(a, key, default=None):
+def val(a: dict, key: str, default=None):
     v = a.get(key)
     return default if v is None else v
 
 
-def row(label, value, unit=""):
+def row(label: str, value, unit: str = "") -> str | None:
     if value is None or value == "" or value == "—":
         return None
     return f"- **{label}:** {value}{(' ' + unit) if unit else ''}  "
 
 
-def hr_zones_summary(zone_times, zone_limits):
+def hr_zones_summary(zone_times: list | None, zone_limits: list | None) -> str | None:
     if not zone_times or not zone_limits:
         return None
     total = sum(zone_times)
@@ -235,7 +237,7 @@ def hr_zones_summary(zone_times, zone_limits):
     return " | ".join(parts)
 
 
-def fetch_intervals(act_id: str):
+def fetch_intervals(act_id: str) -> dict | None:
     """Pobiera szczegółowe splity (WORK/RECOVERY) dla aktywności."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}/intervals"
@@ -250,7 +252,9 @@ def fetch_intervals(act_id: str):
         return None
 
 
-def splits_table(intervals_data, atype, weather=None):
+def splits_table(
+    intervals_data: dict | None, atype: str, weather: dict | None = None
+) -> list[str]:
     """Buduje tabelę splitów z odpowiedzi /intervals + wiatr per split."""
     if not intervals_data:
         return []
@@ -293,7 +297,9 @@ def splits_table(intervals_data, atype, weather=None):
     return lines
 
 
-def activity_note(a, intervals_data=None, weather=None):
+def activity_note(
+    a: dict, intervals_data: dict | None = None, weather: dict | None = None
+) -> str:
     atype = val(a, "type", "Unknown")
     act_id = val(a, "id", "")
     em = emoji(atype)
@@ -564,7 +570,7 @@ def activity_note(a, intervals_data=None, weather=None):
     return "\n".join(lines)
 
 
-def week_summary(activities, year, week_num):
+def week_summary(activities: list, year: int, week_num: int) -> str | None:
     week_acts = []
     for a in activities:
         d = a.get("start_date_local", "")[:10]
@@ -660,18 +666,19 @@ def week_summary(activities, year, week_num):
     return "\n".join(lines)
 
 
-def sync(force=False):
-    state = load_state()
+def sync(force: bool = False) -> None:
+    state: State = load_state()
 
-    last_sync = state.get("last_sync")
+    last_sync: str | None = state.get("last_sync")
     if not force and last_sync:
-        oldest = datetime.fromisoformat(last_sync).strftime("%Y-%m-%d")
+        oldest: str = datetime.fromisoformat(last_sync).strftime("%Y-%m-%d")
     else:
-        oldest = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+        oldest: str = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
 
-    newest = datetime.now().strftime("%Y-%m-%d")
+    newest: str = datetime.now().strftime("%Y-%m-%d")
     print(f"Pobieram aktywności {oldest} → {newest}...")
     activities = api_get(f"activities?oldest={oldest}&newest={newest}")
+    assert isinstance(activities, list)
     print(f"Znaleziono {len(activities)} aktywności")
 
     new_count = 0
@@ -766,6 +773,6 @@ if __name__ == "__main__":
     try:
         sync("--force" in sys.argv)
     except urllib.error.URLError as e:
-        # Brak sieci o 07:00 — wyjdź czysto zamiast wysypywać traceback / exit 1
+        # wyjdź czysto zamiast wysypywać traceback / exit 1
         print(f"Brak sieci / błąd połączenia — pomijam ten przebieg: {e}")
         sys.exit(0)
