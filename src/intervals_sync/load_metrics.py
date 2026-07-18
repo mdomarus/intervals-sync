@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from statistics import mean, pstdev
+from typing import TypedDict
 
 from .config import (
     ACWR_ELEVATED_MAX,
@@ -11,6 +12,7 @@ from .config import (
     MONOTONY_MODERATE_MAX,
     RAMP_AGGRESSIVE_MAX,
     RAMP_SAFE_MAX,
+    TREND_WEEKS,
 )
 from .state import WellnessDay, WellnessSeries
 
@@ -135,3 +137,41 @@ def monotony_label(value: float) -> str:
     if value > MONOTONY_GOOD_MAX:
         return "🟠 moderate"
     return "🟢 good variation"
+
+
+class TrendRow(TypedDict):
+    week: str
+    ctl: float
+    load: float
+    ramp: float | None
+    partial: bool
+
+
+def _last_series_day(series: WellnessSeries) -> str:
+    return max((row.get("id", "") for row in series), default="")
+
+
+def trend_rows(series: WellnessSeries, year: int, week_num: int) -> list[TrendRow]:
+    """Up to TREND_WEEKS trailing weekly rows ending at (year, week_num).
+
+    Weeks with no wellness reference row are skipped. A week is 'partial' when
+    its Sunday is later than the last day present in the series (mid-week sync)."""
+    last_day = _last_series_day(series)
+    end_sunday = _week_sunday(year, week_num)
+    rows: list[TrendRow] = []
+    for weeks_back in range(TREND_WEEKS - 1, -1, -1):
+        week_sunday = end_sunday - timedelta(days=7 * weeks_back)
+        iso_year, iso_week, _ = week_sunday.isocalendar()
+        reference_row = _week_reference_row(series, iso_year, iso_week)
+        if reference_row is None:
+            continue
+        rows.append(
+            {
+                "week": f"{iso_year}-W{iso_week:02d}",
+                "ctl": round(reference_row.get("ctl") or 0.0, 1),
+                "load": round(sum(_week_daily_loads(series, iso_year, iso_week)), 0),
+                "ramp": ramp_rate(series, iso_year, iso_week),
+                "partial": week_sunday.isoformat() > last_day,
+            }
+        )
+    return rows
