@@ -7,6 +7,7 @@ import urllib.request
 import base64
 import glob
 import re
+from typing import Any
 from datetime import datetime, timedelta, date
 from weather import fetch_weather
 from state import load_state, save_state, State
@@ -88,7 +89,7 @@ def get_headers() -> dict[str, str]:
     }
 
 
-def api_get(path: str) -> list | dict:
+def api_get(path: str) -> Any:
     url = f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}"
     req = urllib.request.Request(
         url,
@@ -675,8 +676,7 @@ def sync(force: bool = False) -> None:
 
     newest: str = datetime.now().strftime("%Y-%m-%d")
     print(f"Pobieram aktywności {oldest} → {newest}...")
-    activities = api_get(f"activities?oldest={oldest}&newest={newest}")
-    assert isinstance(activities, list)
+    activities: list[dict] = api_get(f"activities?oldest={oldest}&newest={newest}")
     print(f"Znaleziono {len(activities)} aktywności")
 
     new_count = 0
