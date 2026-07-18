@@ -6,7 +6,7 @@ STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
 
 
 class Activity(TypedDict, total=False):
-    id: int
+    id: str
     type: str
     name: str
     start_date_local: str
@@ -18,17 +18,17 @@ class Activity(TypedDict, total=False):
     average_altitude: float
     min_altitude: float
     max_altitude: float
-    average_heartrate: float
-    max_heartrate: float
-    icu_resting_hr: float
-    athlete_max_hr: float
-    lthr: float
+    average_heartrate: int
+    max_heartrate: int
+    icu_resting_hr: int
+    athlete_max_hr: int
+    lthr: int
     icu_hr_zone_times: list[int]
     icu_hr_zones: list[int]
     average_cadence: float
-    icu_average_watts: float
-    icu_weighted_avg_watts: float
-    icu_ftp: float
+    icu_average_watts: int
+    icu_weighted_avg_watts: int
+    icu_ftp: int
     icu_intensity: float
     icu_variability_index: float
     decoupling: float
@@ -36,22 +36,23 @@ class Activity(TypedDict, total=False):
     polarization_index: float
     icu_ctl: float
     icu_atl: float
-    icu_training_load: float
+    icu_training_load: int
     trimp: float
-    hr_load: float
+    hr_load: int
+    # suffer_score is not in the official API schema; passed through for Strava-synced activities
     suffer_score: float
-    icu_rpe: float
-    session_rpe: float
+    icu_rpe: int
+    session_rpe: int
     perceived_exertion: float
     feel: int
     average_temp: float
-    min_temp: float
-    max_temp: float
-    calories: float
+    min_temp: int
+    max_temp: int
+    calories: int
     icu_weight: float
     device_name: str
     source: str
-    strava_id: int
+    strava_id: str
     race: bool
     description: str
     tags: list[str]
