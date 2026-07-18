@@ -7,14 +7,12 @@ import urllib.error
 from datetime import datetime, timedelta
 from typing import cast
 
-from .api import fetch_intervals, get_activity, set_elevation_correction, api_get
+from .api import api_get, fetch_intervals, get_activity, set_elevation_correction
 from .config import (
-    ACTIVITIES_DIR,
-    DEFAULT_LAT,
-    DEFAULT_LON,
     LOOKBACK_DAYS,
     WEATHER_EXCLUDED_TYPES,
-    WEEKLY_DIR,
+    ConfigError,
+    get_settings,
 )
 from .formatters import iso_year_week, sanitize_filename
 from .notes import activity_note, week_summary
@@ -56,14 +54,14 @@ def write_text_safe(
     return False
 
 
-def scan_existing_notes() -> dict[str, str]:
+def scan_existing_notes(activities_dir: str) -> dict[str, str]:
     """Map of {activity_id: relpath} read from frontmatter of existing notes.
 
     Disk is the source of truth for rename detection and collision avoidance —
     the ID lives in the note itself (activity_id:), so we don't rely on an
     external state file that may drift or be unaware of pre-tracking notes."""
     existing_notes: dict[str, str] = {}
-    for note_path in glob.glob(f"{ACTIVITIES_DIR}/**/*.md", recursive=True):
+    for note_path in glob.glob(f"{activities_dir}/**/*.md", recursive=True):
         try:
             with open(note_path) as f:
                 head = f.read(800)
@@ -71,11 +69,17 @@ def scan_existing_notes() -> dict[str, str]:
             continue
         match = re.search(r"(?m)^activity_id:\s*(\S+)\s*$", head)
         if match:
-            existing_notes[match.group(1)] = os.path.relpath(note_path, ACTIVITIES_DIR)
+            existing_notes[match.group(1)] = os.path.relpath(note_path, activities_dir)
     return existing_notes
 
 
 def sync(force: bool = False) -> None:
+    settings = get_settings()
+    activities_dir = settings["activities_dir"]
+    weekly_dir = settings["weekly_dir"]
+    default_lat = settings["default_lat"]
+    default_lon = settings["default_lon"]
+
     state: State = load_state()
 
     last_sync: str | None = state.get("last_sync")
@@ -95,7 +99,7 @@ def sync(force: bool = False) -> None:
     new_count = 0
     weeks_to_update = set()
     # Disk is the source of truth — read note ID from frontmatter (activity_id).
-    id_to_path = scan_existing_notes()  # {act_id: relpath}
+    id_to_path = scan_existing_notes(activities_dir)  # {act_id: relpath}
     claimed = {rp: aid for aid, rp in id_to_path.items()}  # {relpath: act_id}
 
     for activity in activities:
@@ -115,7 +119,7 @@ def sync(force: bool = False) -> None:
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
             relpath = f"{prefix}{start} {sanitize_filename(name)}__{activity.get('strava_id') or act_id}.md"
-        filepath = f"{ACTIVITIES_DIR}/{relpath}"
+        filepath = f"{activities_dir}/{relpath}"
 
         # Note with this ID already exists at this path → skip (unless --force).
         if not force and id_to_path.get(act_id) == relpath and os.path.exists(filepath):
@@ -139,7 +143,7 @@ def sync(force: bool = False) -> None:
             and activity.get("type") not in WEATHER_EXCLUDED_TYPES
         ):
             weather = fetch_weather(
-                DEFAULT_LAT, DEFAULT_LON, activity["start_date_local"]
+                default_lat, default_lon, activity["start_date_local"]
             )
         note = activity_note(activity, intervals_data, weather)
         if not write_text_safe(filepath, note):
@@ -148,7 +152,7 @@ def sync(force: bool = False) -> None:
         # Rename: same ID was previously at a different path → delete old note.
         old_rel = id_to_path.get(act_id)
         if old_rel and old_rel != relpath:
-            old_path = f"{ACTIVITIES_DIR}/{old_rel}"
+            old_path = f"{activities_dir}/{old_rel}"
             if os.path.exists(old_path):
                 try:
                     os.remove(old_path)
@@ -166,7 +170,7 @@ def sync(force: bool = False) -> None:
     for year, week_num in weeks_to_update:
         summary = week_summary(activities, year, week_num)
         if summary:
-            weekly_note_path = f"{WEEKLY_DIR}/{year}-W{week_num:02d}-sport.md"
+            weekly_note_path = f"{weekly_dir}/{year}-W{week_num:02d}-sport.md"
             if write_text_safe(weekly_note_path, summary):
                 print(f"  📊 {year}-W{week_num:02d}-sport.md updated")
 
@@ -176,10 +180,21 @@ def sync(force: bool = False) -> None:
     )
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Console-script entry point: parse argv, run sync, translate expected
+    failures into friendly messages and exit codes instead of tracebacks."""
     try:
         sync("--force" in sys.argv)
-    except urllib.error.URLError as e:
+    except ConfigError as error:
+        # missing/malformed credentials — print the guidance, not a traceback
+        print(f"Configuration error: {error}")
+        return 1
+    except urllib.error.URLError as error:
         # exit cleanly instead of dumping a traceback / exit 1
-        print(f"No network / connection error — skipping this run: {e}")
-        sys.exit(0)
+        print(f"No network / connection error — skipping this run: {error}")
+        return 0
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

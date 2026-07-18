@@ -1,7 +1,6 @@
-import os
 import json
+import os
 from typing import Any, TypedDict
-
 
 STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
 

@@ -4,7 +4,8 @@ Syncs [intervals.icu](https://intervals.icu) activities to Obsidian markdown not
 
 - Activity notes → `YYYY/MM/YYYY-MM-DD <name>.md` under `activities_dir`
 - Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`
-- No third-party dependencies — stdlib only
+- No third-party runtime dependencies — stdlib only
+- Requires Python 3.10+
 
 ## Setup
 
@@ -48,6 +49,8 @@ uv run intervals-sync --force     # regenerate all notes in the window
 
 Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo location), installs it to `~/Library/LaunchAgents/`, and loads it. Runs daily at 07:00; logs go to `~/Library/Logs/intervals-sync.log`.
 
+`install.sh` is macOS-only. On Linux, schedule `uv run intervals-sync` with cron or a systemd timer instead.
+
 ## How it works
 
 **Activity notes** are written to `YYYY/MM/YYYY-MM-DD <name>.md`. Each note has YAML frontmatter with `activity_id` — this is the source of truth for detecting renames and collisions. If an activity is renamed on intervals.icu, the old note is deleted and a new one is written. If two activities share the same name and date, the second gets a `__{strava_id}` suffix.
@@ -75,9 +78,14 @@ src/intervals_sync/
 ## Development
 
 ```bash
+uv run pytest        # tests
 uv run ty check      # type checking
 uv run ruff check    # linting
 uv run ruff format   # formatting
 ```
 
-Pre-commit hooks run all three automatically on `git commit`.
+Pre-commit hooks run format, lint, type check, and tests automatically on `git commit`. CI runs the same checks on Python 3.10 and 3.13 for every push and pull request.
+
+## License
+
+[MIT](LICENSE)

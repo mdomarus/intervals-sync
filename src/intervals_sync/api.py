@@ -4,12 +4,13 @@ import urllib.error
 import urllib.request
 from typing import Any, cast
 
-from .config import ATHLETE_ID, API_KEY, HTTP_TIMEOUT_SECONDS, INTERVALS_API_URL
+from .config import HTTP_TIMEOUT_SECONDS, INTERVALS_API_URL, get_settings
 from .state import Activity
 
 
 def get_headers() -> dict[str, str]:
-    creds: str = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
+    api_key = get_settings()["api_key"]
+    creds: str = base64.b64encode(f"API_KEY:{api_key}".encode()).decode()
     return {
         "Authorization": f"Basic {creds}",
         "Accept": "application/json",
@@ -28,7 +29,8 @@ def _request(method: str, url: str, body: dict | None = None) -> Any:
 
 
 def api_get(path: str) -> Any:
-    return _request("GET", f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}")
+    athlete_id = get_settings()["athlete_id"]
+    return _request("GET", f"{INTERVALS_API_URL}/athlete/{athlete_id}/{path}")
 
 
 def get_activity(act_id: str) -> Activity | None:

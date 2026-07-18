@@ -8,13 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync                        # install deps / create venv
 uv run intervals-sync          # sync last 60 days, skip already-synced
 uv run intervals-sync --force  # force regenerate all notes in the 60-day window
+uv run pytest                  # run the test suite
 uv run ty check                # type checking (ty, not mypy)
 uv run ruff check              # linting
 uv run ruff format             # formatting
 pre-commit install             # install git hooks
 ```
 
-There are no tests.
+Tests live in `tests/` and cover the pure formatters and config loading. Run them with `uv run pytest`.
 
 ## Architecture
 
@@ -22,12 +23,13 @@ A stdlib-only CLI (`intervals-sync` entry point → `sync.sync`) that syncs [int
 
 ```
 src/intervals_sync/
-  config.py   — credentials and module-level constants (ATHLETE_ID, ACTIVITIES_DIR, etc.)
-  api.py      — single HTTP primitive _request(), intervals.icu API calls
-  notes.py    — formatting helpers, activity_note(), week_summary()
-  sync.py     — orchestration: scan existing notes, write, rename, update weekly summaries
-  state.py    — Activity/State TypedDicts, ~/.intervals_sync_state.json persistence
-  weather.py  — Open-Meteo fetch (no API key), wind_label()
+  config.py     — settings loading via get_settings() (lazy, cached) and module constants
+  api.py        — single HTTP primitive _request(), intervals.icu API calls
+  formatters.py — pure formatting helpers (duration, pace, splits table, …)
+  notes.py      — activity_note(), week_summary()
+  sync.py       — orchestration: scan existing notes, write, rename, update weekly summaries; main() entry point
+  state.py      — Activity/State TypedDicts, ~/.intervals_sync_state.json persistence
+  weather.py    — Open-Meteo fetch (no API key)
 ```
 
 ### Key data flow

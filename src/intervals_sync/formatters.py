@@ -1,6 +1,7 @@
 import unicodedata
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
 
 from .config import RUN_TYPES
 
@@ -86,7 +87,9 @@ def hr_zones_summary(
     if total == 0:
         return None
     parts = []
-    for zone_idx, (zone_time, zone_limit) in enumerate(zip(zone_times, zone_limits)):
+    for zone_idx, (zone_time, zone_limit) in enumerate(
+        zip(zone_times, zone_limits, strict=False)
+    ):
         if zone_time > 0:
             pct = round(zone_time / total * 100)
             mins = zone_time // 60

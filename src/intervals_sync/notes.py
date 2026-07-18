@@ -5,14 +5,14 @@ from .config import RUN_TYPES
 from .formatters import (
     activity_emoji,
     format_duration,
-    format_pace,
     format_markdown_row,
-    iso_year_week,
-    sanitize_filename,
-    mps_to_kmh,
-    splits_table,
+    format_pace,
     get_field,
     hr_zones_summary,
+    iso_year_week,
+    mps_to_kmh,
+    sanitize_filename,
+    splits_table,
 )
 from .state import Activity
 

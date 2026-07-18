@@ -1,5 +1,14 @@
+# Secrets and generated data
 secrets.json
-__pycache__/
-*.log
 data/
 docs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/

@@ -1,6 +1,7 @@
 import json
-import urllib.request
+import urllib.error
 import urllib.parse
+import urllib.request
 from datetime import datetime
 
 from .config import HTTP_TIMEOUT_SECONDS, WEATHER_MAX_PAST_DAYS
@@ -43,6 +44,12 @@ def fetch_weather(lat: float, lon: float, start_iso: str) -> dict[str, float] | 
             "wind_gust": hourly["wind_gusts_10m"][idx],
             "temp": hourly["temperature_2m"][idx],
         }
-    except Exception as e:
-        print(f"  ⚠️  weather fetch failed: {e}")
+    except (
+        ValueError,  # bad date string / non-numeric coordinate
+        urllib.error.URLError,  # network failure / timeout
+        json.JSONDecodeError,  # malformed response body
+        KeyError,  # expected hourly field absent
+        IndexError,  # matched time index out of range
+    ) as error:
+        print(f"  ⚠️  weather fetch failed: {error}")
         return None
