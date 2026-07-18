@@ -14,8 +14,8 @@ from state import load_state, save_state, State, Activity
 
 
 def _load_secrets() -> tuple[str, str, str, str]:
-    """athlete_id + api_key z gitignorowanego secrets.json obok skryptu
-    (fallback: zmienne środowiskowe INTERVALS_ATHLETE_ID / INTERVALS_API_KEY, INTERVALS_VAULT_PATH)."""
+    """Load athlete_id + api_key from gitignored secrets.json next to the script
+    (fallback: env vars INTERVALS_ATHLETE_ID / INTERVALS_API_KEY, INTERVALS_VAULT_PATH)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json")
     if os.path.exists(path):
         with open(path) as f:
@@ -39,20 +39,19 @@ ATHLETE_ID, API_KEY, ACTIVITIES_DIR, WEEKLY_DIR = _load_secrets()
 DEFAULT_LAT, DEFAULT_LON = (
     54.5189,
     18.5305,
-)  # Gdynia — fallback gdy aktywność nie ma GPS
+)  # Gdynia — fallback when activity has no GPS
 
 
 def write_text_safe(
     path: str, content: str, retries: int = 4, delay: float = 1.5
 ) -> bool:
-    """Atomowy, odporny na iCloud zapis pliku.
+    """Atomic, iCloud-safe file write.
 
-    Pisze do pliku tymczasowego w tym samym katalogu i podmienia przez
-    os.replace() (atomowy rename). Rename obchodzi lock File Providera iCloud,
-    który zwykły open(path, "w") dostaje jako `Operation not permitted` (EPERM),
-    gdy plik jest w trakcie synchronizacji — to była przyczyna padów o 07:00.
-    Ponawia przy przejściowym OSError. Zwraca True/False (False = nie uda się
-    zapisać; wołający decyduje czy kontynuować, zamiast wysypywać cały przebieg).
+    Writes to a temp file in the same directory and swaps it via os.replace()
+    (atomic rename). This bypasses the iCloud File Provider lock that plain
+    open(path, "w") hits as EPERM when the file is mid-sync — that was the
+    cause of 07:00 failures. Retries on transient OSError. Returns True/False
+    (False = failed to save; caller decides whether to continue).
     """
     parent_dir = os.path.dirname(path)
     os.makedirs(parent_dir, exist_ok=True)
@@ -73,7 +72,7 @@ def write_text_safe(
                 pass
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
-    print(f"  ⚠️  nie udało się zapisać {os.path.basename(path)}: {last}")
+    print(f"  ⚠️  failed to save {os.path.basename(path)}: {last}")
     return False
 
 
@@ -100,7 +99,7 @@ def api_get(path: str) -> Any:
 
 
 def get_activity(act_id: str) -> dict | None:
-    """Świeży pojedynczy rekord aktywności (np. po zmianie ustawień serwerowych)."""
+    """Fetch a fresh single activity record (e.g. after server-side settings change)."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}"
         req = urllib.request.Request(
@@ -115,9 +114,9 @@ def get_activity(act_id: str) -> dict | None:
 
 
 def set_elevation_correction(act_id: str, value: bool) -> bool:
-    """Wyłącza/włącza korektę elewacji intervals.icu (DEM). Wyłączona = zegarek
-    (barometr) — wartość zgodna ze Stravą/Garminem, której ufa Michał. Zwraca
-    True przy sukcesie. Po PUT serwer przelicza total_elevation_gain asynchronicznie."""
+    """Enable/disable elevation correction (DEM) on intervals.icu. Disabled = device
+    barometer — consistent with Strava/Garmin. Returns True on success. After PUT the
+    server recalculates total_elevation_gain asynchronously."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}"
         data = json.dumps({"use_elevation_correction": value}).encode()
@@ -136,7 +135,7 @@ def set_elevation_correction(act_id: str, value: bool) -> bool:
             resp.read()
         return True
     except Exception as e:
-        print(f"  ⚠ nie udało się ustawić elevation_correction dla {act_id}: {e}")
+        print(f"  ⚠ failed to set elevation_correction for {act_id}: {e}")
         return False
 
 
@@ -187,17 +186,17 @@ def safe_name(text: str) -> str:
         if c.isalnum() or c in " -_":
             return True
         cat = unicodedata.category(c)
-        return cat in ("So", "Sm", "Sk", "Sc")  # emoji i symbole Unicode
+        return cat in ("So", "Sm", "Sk", "Sc")  # emoji and Unicode symbols
 
     return "".join(c if keep(c) else "_" for c in text)
 
 
 def scan_existing_notes() -> dict[str, str]:
-    """Mapa {activity_id: relpath} z frontmattera istniejących notatek.
+    """Map of {activity_id: relpath} read from frontmatter of existing notes.
 
-    Dysk jest źródłem prawdy dla wykrywania zmiany nazwy i kolizji — ID siedzi
-    w samej notatce (`activity_id:`), więc nie polegamy na zewnętrznym pliku
-    stanu (który może się rozjechać albo nie znać notatek sprzed śledzenia)."""
+    Disk is the source of truth for rename detection and collision avoidance —
+    the ID lives in the note itself (activity_id:), so we don't rely on an
+    external state file that may drift or be unaware of pre-tracking notes."""
     out = {}
     for note_path in glob.glob(f"{ACTIVITIES_DIR}/**/*.md", recursive=True):
         try:
@@ -239,7 +238,7 @@ def hr_zones_summary(zone_times: list | None, zone_limits: list | None) -> str |
 
 
 def fetch_intervals(act_id: str) -> dict | None:
-    """Pobiera szczegółowe splity (WORK/RECOVERY) dla aktywności."""
+    """Fetch detailed splits (WORK/RECOVERY) for an activity."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}/intervals"
         req = urllib.request.Request(
@@ -254,21 +253,21 @@ def fetch_intervals(act_id: str) -> dict | None:
 
 
 def splits_table(intervals_data: dict | None, atype: str) -> list[str]:
-    """Buduje tabelę splitów z odpowiedzi /intervals + wiatr per split."""
+    """Build a splits table from the /intervals response."""
     if not intervals_data:
         return []
     ivs = intervals_data.get("icu_intervals") or []
     if not ivs:
         return []
     is_run = atype in ("Run", "TrailRun")
-    lines = ["", "## Splity (intervals.icu)", ""]
+    lines = ["", "## Splits (intervals.icu)", ""]
     if is_run:
         hdr = (
-            "| # | Typ | Dystans | Czas | Tempo | GAP | HR avg | HR max | Zone | Int |"
+            "| # | Type | Distance | Time | Pace | GAP | HR avg | HR max | Zone | Int |"
         )
         sep = "|--:|:---|--------:|-----:|------:|----:|-------:|-------:|-----:|----:|"
     else:
-        hdr = "| # | Typ | Dystans | Czas | Speed | HR avg | HR max | Zone | Int |"
+        hdr = "| # | Type | Distance | Time | Speed | HR avg | HR max | Zone | Int |"
         sep = "|--:|:---|--------:|-----:|------:|-------:|-------:|-----:|----:|"
     lines.append(hdr)
     lines.append(sep)
@@ -306,7 +305,7 @@ def activity_note(
     atype = val(a, "type", "Unknown")
     act_id = val(a, "id", "")
     activity_emoji = emoji(atype)
-    name = val(a, "name", "Aktywność")
+    name = val(a, "name", "Activity")
     start_raw = val(a, "start_date_local", "")
     start = start_raw[:16].replace("T", " ")
 
@@ -388,58 +387,55 @@ def activity_note(
         "",
     ]
     if race:
-        lines.append("> 🏁 **WYŚCIG**\n")
+        lines.append("> 🏁 **RACE**\n")
 
-    # Podstawowe
-    lines += ["## Podstawowe", ""]
+    lines += ["## Overview", ""]
     for r in filter(
         None,
         [
-            row("Typ", atype),
-            row("Data", start),
-            row("Dystans", f"{dist_km}" if dist_km > 0 else None, "km"),
-            row("Czas (moving)", hms(moving) if moving else None),
+            row("Type", atype),
+            row("Date", start),
+            row("Distance", f"{dist_km}" if dist_km > 0 else None, "km"),
+            row("Time (moving)", hms(moving) if moving else None),
             row(
-                "Czas (elapsed)",
+                "Time (elapsed)",
                 hms(elapsed) if elapsed and elapsed != moving else None,
             ),
-            row("Tempo", pace_str),
-            row("Prędkość avg", speed_str, "km/h"),
-            row("Prędkość max", max_speed_str, "km/h"),
-            row("Przewyższenie ↑", elev_gain if elev_gain > 0 else None, "m D+"),
-            row("Przewyższenie ↓", elev_loss if elev_loss > 0 else None, "m D-"),
+            row("Pace", pace_str),
+            row("Speed avg", speed_str, "km/h"),
+            row("Speed max", max_speed_str, "km/h"),
+            row("Elevation gain", elev_gain if elev_gain > 0 else None, "m"),
+            row("Elevation loss", elev_loss if elev_loss > 0 else None, "m"),
             row("Warmup", hms(warmup) if warmup else None),
             row("Cooldown", hms(cooldown) if cooldown else None),
         ],
     ):
         lines.append(r)
 
-    # Tętno
     if hr_avg or hr_max:
-        lines += ["", "## Tętno", ""]
+        lines += ["", "## Heart Rate", ""]
         for r in filter(
             None,
             [
                 row("HR avg", int(hr_avg) if hr_avg else None, "bpm"),
                 row("HR max", int(hr_max) if hr_max else None, "bpm"),
-                row("HR spoczynkowy", hr_rest, "bpm"),
-                row("HR max (atlet)", hr_max_athlete, "bpm"),
+                row("HR resting", hr_rest, "bpm"),
+                row("HR max (athlete)", hr_max_athlete, "bpm"),
                 row("LTHR", lthr, "bpm"),
             ],
         ):
             lines.append(r)
         if zones_str:
-            lines.append(f"- **Strefy HR:** {zones_str}  ")
+            lines.append(f"- **HR Zones:** {zones_str}  ")
 
-    # Moc (jeśli dostępna)
     if power_avg or power_weighted:
-        lines += ["", "## Moc", ""]
+        lines += ["", "## Power", ""]
         for r in filter(
             None,
             [
-                row("Moc avg", int(power_avg) if power_avg else None, "W"),
+                row("Power avg", int(power_avg) if power_avg else None, "W"),
                 row(
-                    "Moc ważona (NP)",
+                    "Normalized Power (NP)",
                     int(power_weighted) if power_weighted else None,
                     "W",
                 ),
@@ -454,8 +450,7 @@ def activity_note(
         ):
             lines.append(r)
 
-    # Obciążenie treningowe
-    lines += ["", "## Obciążenie treningowe", ""]
+    lines += ["", "## Training Load", ""]
     for r in filter(
         None,
         [
@@ -463,20 +458,19 @@ def activity_note(
             row("TRIMP", round(trimp, 1) if trimp else None),
             row("HR Load", round(hr_load, 1) if hr_load else None),
             row("Suffer Score", int(suffer) if suffer else None),
-            row("Intensywność sesji", f"{round(intensity, 1)}%" if intensity else None),
+            row("Session Intensity", f"{round(intensity, 1)}%" if intensity else None),
             row("Efficiency Factor", round(ef, 2) if ef else None),
             row("Decoupling", f"{round(decoupling, 1)}%" if decoupling else None),
             row("Polarization Index", round(polarization, 2) if polarization else None),
-            row("CTL (forma)", round(ctl, 1) if ctl else None),
-            row("ATL (zmęczenie)", round(atl, 1) if atl else None),
-            row("TSB (świeżość)", round(ctl - atl, 1) if ctl and atl else None),
+            row("CTL (fitness)", round(ctl, 1) if ctl else None),
+            row("ATL (fatigue)", round(atl, 1) if atl else None),
+            row("TSB (freshness)", round(ctl - atl, 1) if ctl and atl else None),
         ],
     ):
         lines.append(r)
 
-    # Odczucia
     if rpe or feel:
-        lines += ["", "## Odczucia", ""]
+        lines += ["", "## Feel", ""]
         for r in filter(
             None,
             [
@@ -486,15 +480,14 @@ def activity_note(
         ):
             lines.append(r)
 
-    # Warunki
     if temp_avg is not None:
-        lines += ["", "## Warunki", ""]
+        lines += ["", "## Conditions", ""]
         for r in filter(
             None,
             [
-                row("Temperatura avg", f"{round(temp_avg, 1)}", "°C"),
+                row("Temp avg", f"{round(temp_avg, 1)}", "°C"),
                 row(
-                    "Temperatura min/max",
+                    "Temp min/max",
                     f"{temp_min}/{temp_max}" if temp_min is not None else None,
                     "°C",
                 ),
@@ -510,16 +503,15 @@ def activity_note(
         ):
             lines.append(r)
 
-    # Inne
-    lines += ["", "## Inne", ""]
+    lines += ["", "## Other", ""]
     for r in filter(
         None,
         [
-            row("Kadencja", int(cadence) if cadence else None),
-            row("Kalorie", int(calories) if calories else None, "kcal"),
-            row("Waga", weight, "kg"),
-            row("Urządzenie", device),
-            row("Źródło", source),
+            row("Cadence", int(cadence) if cadence else None),
+            row("Calories", int(calories) if calories else None, "kcal"),
+            row("Weight", weight, "kg"),
+            row("Device", device),
+            row("Source", source),
         ],
     ):
         lines.append(r)
@@ -528,27 +520,26 @@ def activity_note(
             f"- **Strava:** [link](https://www.strava.com/activities/{strava_id})  "
         )
 
-    # Pogoda (z Open-Meteo, jeśli intervals.icu nie ma własnej)
     if weather:
-        lines += ["", "## Pogoda (Open-Meteo)", ""]
+        lines += ["", "## Weather (Open-Meteo)", ""]
         for r in filter(
             None,
             [
                 row(
-                    "Temperatura",
+                    "Temperature",
                     f"{round(weather['temp'], 1)}"
                     if weather.get("temp") is not None
                     else None,
                     "°C",
                 ),
                 row(
-                    "Wiatr",
-                    f"{round(weather['wind_speed'], 1)} km/h od {int(weather['wind_dir'])}°"
+                    "Wind",
+                    f"{round(weather['wind_speed'], 1)} km/h from {int(weather['wind_dir'])}°"
                     if weather.get("wind_speed") is not None
                     else None,
                 ),
                 row(
-                    "Porywy",
+                    "Gusts",
                     f"{round(weather['wind_gust'], 1)}"
                     if weather.get("wind_gust") is not None
                     else None,
@@ -560,15 +551,13 @@ def activity_note(
 
     lines += splits_table(intervals_data, atype)
 
-    # Interwały (auto-grupy z interval_summary)
     if interval_summary:
-        lines += ["", "## Interwały (auto-grupy)", ""]
+        lines += ["", "## Intervals (auto-groups)", ""]
         for s in interval_summary:
             lines.append(f"- {s}")
 
-    # Opis
     if description:
-        lines += ["", "## Opis", "", description]
+        lines += ["", "## Description", "", description]
 
     return "\n".join(lines)
 
@@ -597,7 +586,7 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
     total_trimp = sum((a.get("trimp", 0) or 0) for a in week_acts)
     total_cal = sum((a.get("calories", 0) or 0) for a in week_acts)
 
-    # CTL/ATL z ostatniej aktywności tygodnia
+    # CTL/ATL from the last activity of the week
     sorted_acts = sorted(week_acts, key=lambda x: x.get("start_date_local", ""))
     last = sorted_acts[-1]
     ctl = last.get("icu_ctl")
@@ -624,43 +613,41 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
         f"week: {year}-W{week_num:02d}",
         "---",
         "",
-        f"# 📊 Tygodniowe podsumowanie sportu — {year}-W{week_num:02d}",
-        f"**Okres:** {week_start.strftime('%d.%m')} – {week_end.strftime('%d.%m.%Y')}",
+        f"# 📊 Weekly sport summary — {year}-W{week_num:02d}",
+        f"**Period:** {week_start.strftime('%d.%m')} – {week_end.strftime('%d.%m.%Y')}",
         "",
-        "## Łącznie",
+        "## Totals",
         "",
-        f"- **Aktywności:** {len(week_acts)}",
-        f"- **Dystans:** {round(total_dist, 1)} km",
-        f"- **Czas:** {hms(total_time)}",
-        f"- **Przewyższenie:** {total_elev} m D+",
+        f"- **Activities:** {len(week_acts)}",
+        f"- **Distance:** {round(total_dist, 1)} km",
+        f"- **Time:** {hms(total_time)}",
+        f"- **Elevation:** {total_elev} m",
     ]
     if total_load:
         lines.append(f"- **Training Load:** {round(total_load, 1)}")
     if total_trimp:
         lines.append(f"- **TRIMP:** {round(total_trimp, 1)}")
     if total_cal:
-        lines.append(f"- **Kalorie:** {int(total_cal)} kcal")
+        lines.append(f"- **Calories:** {int(total_cal)} kcal")
     if ctl:
-        lines.append(f"- **CTL (forma):** {round(ctl, 1)}")
+        lines.append(f"- **CTL (fitness):** {round(ctl, 1)}")
     if atl:
-        lines.append(f"- **ATL (zmęczenie):** {round(atl, 1)}")
+        lines.append(f"- **ATL (fatigue):** {round(atl, 1)}")
     if tsb is not None:
-        tsb_label = (
-            "świeży 💪" if tsb > 5 else ("zmęczony 😴" if tsb < -10 else "neutralny")
-        )
-        lines.append(f"- **TSB (świeżość):** {tsb} ({tsb_label})")
+        tsb_label = "fresh 💪" if tsb > 5 else ("tired 😴" if tsb < -10 else "neutral")
+        lines.append(f"- **TSB (freshness):** {tsb} ({tsb_label})")
 
-    lines += ["", "## Według typu", ""]
+    lines += ["", "## By type", ""]
     for t, stats in sorted(by_type.items()):
         lines.append(
             f"- {emoji(t)} **{t}** — {stats['count']}x, "
-            f"{round(stats['dist'], 1)} km, {hms(stats['time'])}, {stats['elev']} m D+"
+            f"{round(stats['dist'], 1)} km, {hms(stats['time'])}, {stats['elev']} m"
         )
 
-    lines += ["", "## Aktywności", ""]
+    lines += ["", "## Activities", ""]
     for activity in sorted_acts:
         activity_emoji = emoji(activity.get("type", ""))
-        name = activity.get("name", "Aktywność")
+        name = activity.get("name", "Activity")
         date_str = activity.get("start_date_local", "")[:10]
         dist_km = round((activity.get("distance", 0) or 0) / 1000, 1)
         training_load = activity.get("icu_training_load")
@@ -683,15 +670,15 @@ def sync(force: bool = False) -> None:
         oldest: str = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
 
     newest: str = datetime.now().strftime("%Y-%m-%d")
-    print(f"Pobieram aktywności {oldest} → {newest}...")
+    print(f"Fetching activities {oldest} → {newest}...")
     activities = cast(
         list[Activity], api_get(f"activities?oldest={oldest}&newest={newest}")
     )
-    print(f"Znaleziono {len(activities)} aktywności")
+    print(f"Found {len(activities)} activities")
 
     new_count = 0
     weeks_to_update = set()
-    # Dysk = źródło prawdy. ID notatki czytamy z frontmattera (activity_id).
+    # Disk is the source of truth — read note ID from frontmatter (activity_id).
     id_to_path = scan_existing_notes()  # {act_id: relpath}
     claimed = {rp: aid for aid, rp in id_to_path.items()}  # {relpath: act_id}
 
@@ -702,13 +689,13 @@ def sync(force: bool = False) -> None:
         if a.get("type") == "Walk":
             continue
         start = a.get("start_date_local", "")[:10]
-        name = a.get("name", "Aktywnosc")
-        # treningi w podfolderach YYYY/MM (write_text_safe tworzy katalogi)
+        name = a.get("name", "Activity")
+        # activities go into YYYY/MM subdirs (write_text_safe creates dirs)
         subdir = f"{start[:4]}/{start[5:7]}" if len(start) >= 7 else ""
         prefix = f"{subdir}/" if subdir else ""
         relpath = f"{prefix}{start} {safe_name(name)}.md"
-        # Kolizja: inna aktywność (inne ID) zajęła już tę nazwę → dopisz ID,
-        # żeby jej nie nadpisać (np. 2× „Gdansk Road Cycling" tego samego dnia).
+        # Collision: a different activity (different ID) already claimed this name →
+        # append ID to avoid overwriting (e.g. 2× "Gdansk Road Cycling" same day).
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
             relpath = (
@@ -716,14 +703,14 @@ def sync(force: bool = False) -> None:
             )
         filepath = f"{ACTIVITIES_DIR}/{relpath}"
 
-        # Notatka z tym ID już jest pod tą samą ścieżką → pomiń (chyba że --force).
+        # Note with this ID already exists at this path → skip (unless --force).
         if not force and id_to_path.get(act_id) == relpath and os.path.exists(filepath):
             claimed[relpath] = act_id
             continue
 
-        # Wyłącz korektę elewacji (DEM) — chcemy wartość z zegarka (barometr),
-        # zgodną ze Stravą/Garminem. total_elevation_gain jest przeliczane po
-        # stronie serwera, więc po PUT odświeżamy rekord aktywności.
+        # Disable elevation correction (DEM) — use device barometer, consistent
+        # with Strava/Garmin. total_elevation_gain is recalculated server-side,
+        # so we re-fetch the activity after the PUT.
         if a.get("use_elevation_correction"):
             if set_elevation_correction(act_id, False):
                 time.sleep(2.5)
@@ -744,14 +731,14 @@ def sync(force: bool = False) -> None:
         if not write_text_safe(filepath, note):
             continue
 
-        # Zmiana nazwy: notatka tego samego ID była pod inną ścieżką → usuń starą.
+        # Rename: same ID was previously at a different path → delete old note.
         old_rel = id_to_path.get(act_id)
         if old_rel and old_rel != relpath:
             old_path = f"{ACTIVITIES_DIR}/{old_rel}"
             if os.path.exists(old_path):
                 try:
                     os.remove(old_path)
-                    print(f"  🗑  usunięto starą nazwę: {old_rel}")
+                    print(f"  🗑  removed old note: {old_rel}")
                 except OSError:
                     pass
             claimed.pop(old_rel, None)
@@ -769,11 +756,11 @@ def sync(force: bool = False) -> None:
         if summary:
             wf = f"{WEEKLY_DIR}/{year}-W{week_num:02d}-sport.md"
             if write_text_safe(wf, summary):
-                print(f"  📊 {year}-W{week_num:02d}-sport.md zaktualizowany")
+                print(f"  📊 {year}-W{week_num:02d}-sport.md updated")
 
     save_state({"last_sync": datetime.now().isoformat()})
     print(
-        f"\nGotowe: {new_count} zaktualizowanych aktywności, {len(weeks_to_update)} tygodni"
+        f"\nDone: {new_count} activities updated, {len(weeks_to_update)} weeks regenerated"
     )
 
 
@@ -781,6 +768,6 @@ if __name__ == "__main__":
     try:
         sync("--force" in sys.argv)
     except urllib.error.URLError as e:
-        # wyjdź czysto zamiast wysypywać traceback / exit 1
-        print(f"Brak sieci / błąd połączenia — pomijam ten przebieg: {e}")
+        # exit cleanly instead of dumping a traceback / exit 1
+        print(f"No network / connection error — skipping this run: {e}")
         sys.exit(0)

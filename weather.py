@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 def fetch_weather(lat: float, lon: float, start_iso: str):
-    """Open-Meteo forecast API z past_days — działa dla dzisiaj i do 92 dni wstecz."""
+    """Open-Meteo forecast API with past_days — works for today and up to 92 days back."""
     try:
         start_dt = (
             datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
@@ -47,7 +47,7 @@ def fetch_weather(lat: float, lon: float, start_iso: str):
 
 
 def wind_label(course_deg, wind_from_deg):
-    """Względny kąt wiatr→kierunek biegu. Wind 'from' = skąd wieje."""
+    """Relative angle wind→course direction. Wind 'from' = direction wind is blowing from."""
     if course_deg is None or wind_from_deg is None:
         return "—"
     rel = ((course_deg - wind_from_deg + 540) % 360) - 180
