@@ -1,4 +1,5 @@
 from datetime import date
+from statistics import pstdev
 
 from intervals_sync.load_metrics import (
     _week_daily_loads,
@@ -6,6 +7,8 @@ from intervals_sync.load_metrics import (
     _week_sunday,
     acwr,
     acwr_label,
+    monotony_and_strain,
+    monotony_label,
     ramp_rate,
     ramp_rate_label,
     week_over_week_label,
@@ -113,3 +116,24 @@ class TestWeekOverWeekLoad:
         assert "large jump" in week_over_week_label(40.0)
         assert "normal" in week_over_week_label(10.0)
         assert "deload" in week_over_week_label(-40.0)
+
+
+class TestMonotonyAndStrain:
+    def test_single_heavy_day_gives_high_monotony(self) -> None:
+        # One heavy day, rest zero → high monotony (spread small relative to mean)
+        series = _series(("2026-07-13", 0.0, 0.0, 70.0))
+        result = monotony_and_strain(series, 2026, 29)
+        assert result is not None
+        monotony, strain = result
+        expected_monotony = round((70 / 7) / pstdev([70.0, 0, 0, 0, 0, 0, 0]), 2)
+        assert monotony == expected_monotony
+        assert strain == round(70.0 * expected_monotony, 0)
+
+    def test_none_when_stdev_zero(self) -> None:
+        # All seven days equal (including all-zero) → pstdev 0 → undefined monotony
+        assert monotony_and_strain(_series(), 2026, 29) is None
+
+    def test_label_bands(self) -> None:
+        assert "high" in monotony_label(2.5)
+        assert "moderate" in monotony_label(1.7)
+        assert "good" in monotony_label(1.0)
