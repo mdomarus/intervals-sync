@@ -29,3 +29,15 @@ DEFAULT_LAT, DEFAULT_LON = (
     54.5189,
     18.5305,
 )  # Gdynia — fallback when activity has no GPS
+
+# How far back to sync when there is no recorded last-sync timestamp.
+LOOKBACK_DAYS = 60
+# Socket timeout for all outbound HTTP requests (intervals.icu + Open-Meteo).
+HTTP_TIMEOUT_SECONDS = 30
+# Open-Meteo forecast API only serves up to this many past days.
+WEATHER_MAX_PAST_DAYS = 92
+
+# Distance/pace-based run types (get a Pace row and a run-shaped splits table).
+RUN_TYPES = ("Run", "TrailRun")
+# Indoor / GPS-less types that never get a weather lookup.
+WEATHER_EXCLUDED_TYPES = ("WeightTraining", "Workout", "VirtualRide", "Swim")

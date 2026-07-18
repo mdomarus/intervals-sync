@@ -1,5 +1,19 @@
 import unicodedata
+from datetime import datetime
 from typing import Any, Mapping
+
+from .config import RUN_TYPES
+
+
+def iso_year_week(date_str: str) -> tuple[int, int]:
+    """(ISO year, ISO week number) for a ``YYYY-MM-DD`` date string.
+
+    Shared by sync (to key which weeks need regenerating) and week_summary (to
+    match activities into a week) so the two can't drift on week boundaries.
+    """
+    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+    iso_calendar = parsed_date.isocalendar()
+    return iso_calendar[0], iso_calendar[1]
 
 
 def format_duration(total_seconds: int | float | None) -> str:
@@ -71,13 +85,12 @@ def hr_zones_summary(
     total = sum(zone_times)
     if total == 0:
         return None
-    labels = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7"]
     parts = []
     for zone_idx, (zone_time, zone_limit) in enumerate(zip(zone_times, zone_limits)):
         if zone_time > 0:
             pct = round(zone_time / total * 100)
             mins = zone_time // 60
-            parts.append(f"{labels[zone_idx]} ({zone_limit}+bpm): {mins}min ({pct}%)")
+            parts.append(f"Z{zone_idx + 1} ({zone_limit}+bpm): {mins}min ({pct}%)")
     return " | ".join(parts)
 
 
@@ -90,7 +103,7 @@ def splits_table(
     raw_intervals = intervals_data.get("icu_intervals") or []
     if not raw_intervals:
         return []
-    is_run = activity_type in ("Run", "TrailRun")
+    is_run = activity_type in RUN_TYPES
     lines: list[str] = ["", "## Splits (intervals.icu)", ""]
     if is_run:
         hdr = (

@@ -8,8 +8,15 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from .api import fetch_intervals, get_activity, set_elevation_correction, api_get
-from .config import ACTIVITIES_DIR, DEFAULT_LAT, DEFAULT_LON, WEEKLY_DIR
-from .formatters import sanitize_filename
+from .config import (
+    ACTIVITIES_DIR,
+    DEFAULT_LAT,
+    DEFAULT_LON,
+    LOOKBACK_DAYS,
+    WEATHER_EXCLUDED_TYPES,
+    WEEKLY_DIR,
+)
+from .formatters import iso_year_week, sanitize_filename
 from .notes import activity_note, week_summary
 from .state import Activity, State, load_state, save_state
 from .weather import fetch_weather
@@ -72,10 +79,11 @@ def sync(force: bool = False) -> None:
     state: State = load_state()
 
     last_sync: str | None = state.get("last_sync")
+    oldest: str
     if not force and last_sync:
-        oldest: str = datetime.fromisoformat(last_sync).strftime("%Y-%m-%d")
+        oldest = datetime.fromisoformat(last_sync).strftime("%Y-%m-%d")
     else:
-        oldest: str = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+        oldest = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime("%Y-%m-%d")
 
     newest: str = datetime.now().strftime("%Y-%m-%d")
     print(f"Fetching activities {oldest} → {newest}...")
@@ -126,11 +134,9 @@ def sync(force: bool = False) -> None:
 
         intervals_data = fetch_intervals(act_id)
         weather = None
-        if activity.get("start_date_local") and activity.get("type") not in (
-            "WeightTraining",
-            "Workout",
-            "VirtualRide",
-            "Swim",
+        if (
+            activity.get("start_date_local")
+            and activity.get("type") not in WEATHER_EXCLUDED_TYPES
         ):
             weather = fetch_weather(
                 DEFAULT_LAT, DEFAULT_LON, activity["start_date_local"]
@@ -154,9 +160,7 @@ def sync(force: bool = False) -> None:
         claimed[relpath] = act_id
 
         new_count += 1
-        activity_date = datetime.strptime(start, "%Y-%m-%d")
-        iso_calendar = activity_date.isocalendar()
-        weeks_to_update.add((iso_calendar[0], iso_calendar[1]))
+        weeks_to_update.add(iso_year_week(start))
         print(f"  ✓ {relpath}")
 
     for year, week_num in weeks_to_update:

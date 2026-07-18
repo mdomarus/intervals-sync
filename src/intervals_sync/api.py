@@ -4,7 +4,7 @@ import urllib.error
 import urllib.request
 from typing import Any, cast
 
-from .config import ATHLETE_ID, API_KEY, INTERVALS_API_URL
+from .config import ATHLETE_ID, API_KEY, HTTP_TIMEOUT_SECONDS, INTERVALS_API_URL
 from .state import Activity
 
 
@@ -23,7 +23,7 @@ def _request(method: str, url: str, body: dict | None = None) -> Any:
     if data is not None:
         headers = {**headers, "Content-Type": "application/json"}
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
         return json.loads(resp.read())
 
 

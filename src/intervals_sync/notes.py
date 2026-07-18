@@ -1,11 +1,13 @@
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
+from .config import RUN_TYPES
 from .formatters import (
     activity_emoji,
     format_duration,
     format_pace,
     format_markdown_row,
+    iso_year_week,
     sanitize_filename,
     mps_to_kmh,
     splits_table,
@@ -90,9 +92,7 @@ def activity_note(
     if tags:
         tag_list += tags
 
-    pace_str = (
-        format_pace(dist_m, moving) if activity_type in ("Run", "TrailRun") else None
-    )
+    pace_str = format_pace(dist_m, moving) if activity_type in RUN_TYPES else None
     speed_str = mps_to_kmh(get_field(activity, "average_speed"))
     max_speed_str = mps_to_kmh(get_field(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
@@ -114,151 +114,171 @@ def activity_note(
         lines.append("> 🏁 **RACE**\n")
 
     lines += ["## Overview", ""]
-    for note_row in filter(
-        None,
-        [
-            format_markdown_row("Type", activity_type),
-            format_markdown_row("Date", start),
-            format_markdown_row(
-                "Distance", f"{dist_km}" if dist_km > 0 else None, "km"
-            ),
-            format_markdown_row(
-                "Time (moving)", format_duration(moving) if moving else None
-            ),
-            format_markdown_row(
-                "Time (elapsed)",
-                format_duration(elapsed) if elapsed and elapsed != moving else None,
-            ),
-            format_markdown_row("Pace", pace_str),
-            format_markdown_row("Speed avg", speed_str, "km/h"),
-            format_markdown_row("Speed max", max_speed_str, "km/h"),
-            format_markdown_row(
-                "Elevation gain", elev_gain if elev_gain > 0 else None, "m"
-            ),
-            format_markdown_row(
-                "Elevation loss", elev_loss if elev_loss > 0 else None, "m"
-            ),
-            format_markdown_row("Warmup", format_duration(warmup) if warmup else None),
-            format_markdown_row(
-                "Cooldown", format_duration(cooldown) if cooldown else None
-            ),
-        ],
-    ):
-        lines.append(note_row)
+    lines.extend(
+        filter(
+            None,
+            [
+                format_markdown_row("Type", activity_type),
+                format_markdown_row("Date", start),
+                format_markdown_row(
+                    "Distance", f"{dist_km}" if dist_km > 0 else None, "km"
+                ),
+                format_markdown_row(
+                    "Time (moving)", format_duration(moving) if moving else None
+                ),
+                format_markdown_row(
+                    "Time (elapsed)",
+                    format_duration(elapsed) if elapsed and elapsed != moving else None,
+                ),
+                format_markdown_row("Pace", pace_str),
+                format_markdown_row("Speed avg", speed_str, "km/h"),
+                format_markdown_row("Speed max", max_speed_str, "km/h"),
+                format_markdown_row(
+                    "Elevation gain", elev_gain if elev_gain > 0 else None, "m"
+                ),
+                format_markdown_row(
+                    "Elevation loss", elev_loss if elev_loss > 0 else None, "m"
+                ),
+                format_markdown_row(
+                    "Warmup", format_duration(warmup) if warmup else None
+                ),
+                format_markdown_row(
+                    "Cooldown", format_duration(cooldown) if cooldown else None
+                ),
+            ],
+        )
+    )
 
     if hr_avg or hr_max:
         lines += ["", "## Heart Rate", ""]
-        for note_row in filter(
-            None,
-            [
-                format_markdown_row("HR avg", int(hr_avg) if hr_avg else None, "bpm"),
-                format_markdown_row("HR max", int(hr_max) if hr_max else None, "bpm"),
-                format_markdown_row("HR resting", hr_rest, "bpm"),
-                format_markdown_row("HR max (athlete)", hr_max_athlete, "bpm"),
-                format_markdown_row("LTHR", lthr, "bpm"),
-            ],
-        ):
-            lines.append(note_row)
+        lines.extend(
+            filter(
+                None,
+                [
+                    format_markdown_row(
+                        "HR avg", int(hr_avg) if hr_avg else None, "bpm"
+                    ),
+                    format_markdown_row(
+                        "HR max", int(hr_max) if hr_max else None, "bpm"
+                    ),
+                    format_markdown_row("HR resting", hr_rest, "bpm"),
+                    format_markdown_row("HR max (athlete)", hr_max_athlete, "bpm"),
+                    format_markdown_row("LTHR", lthr, "bpm"),
+                ],
+            )
+        )
         if zones_str:
             lines.append(f"- **HR Zones:** {zones_str}  ")
 
     if power_avg or power_weighted:
         lines += ["", "## Power", ""]
-        for note_row in filter(
+        lines.extend(
+            filter(
+                None,
+                [
+                    format_markdown_row(
+                        "Power avg", int(power_avg) if power_avg else None, "W"
+                    ),
+                    format_markdown_row(
+                        "Normalized Power (NP)",
+                        int(power_weighted) if power_weighted else None,
+                        "W",
+                    ),
+                    format_markdown_row("FTP", ftp, "W"),
+                    format_markdown_row(
+                        "Intensity Factor",
+                        round(intensity / 100, 2) if intensity else None,
+                    ),
+                    format_markdown_row(
+                        "Variability Index",
+                        round(variability, 2) if variability else None,
+                    ),
+                ],
+            )
+        )
+
+    lines += ["", "## Training Load", ""]
+    lines.extend(
+        filter(
             None,
             [
                 format_markdown_row(
-                    "Power avg", int(power_avg) if power_avg else None, "W"
+                    "Training Load", round(training_load, 1) if training_load else None
+                ),
+                format_markdown_row("TRIMP", round(trimp, 1) if trimp else None),
+                format_markdown_row("HR Load", round(hr_load, 1) if hr_load else None),
+                format_markdown_row("Suffer Score", int(suffer) if suffer else None),
+                format_markdown_row(
+                    "Session Intensity",
+                    f"{round(intensity, 1)}%" if intensity else None,
+                ),
+                format_markdown_row("Efficiency Factor", round(ef, 2) if ef else None),
+                format_markdown_row(
+                    "Decoupling", f"{round(decoupling, 1)}%" if decoupling else None
                 ),
                 format_markdown_row(
-                    "Normalized Power (NP)",
-                    int(power_weighted) if power_weighted else None,
-                    "W",
+                    "Polarization Index",
+                    round(polarization, 2) if polarization else None,
                 ),
-                format_markdown_row("FTP", ftp, "W"),
+                format_markdown_row("CTL (fitness)", round(ctl, 1) if ctl else None),
+                format_markdown_row("ATL (fatigue)", round(atl, 1) if atl else None),
                 format_markdown_row(
-                    "Intensity Factor", round(intensity / 100, 2) if intensity else None
-                ),
-                format_markdown_row(
-                    "Variability Index", round(variability, 2) if variability else None
+                    "TSB (freshness)", round(ctl - atl, 1) if ctl and atl else None
                 ),
             ],
-        ):
-            lines.append(note_row)
-
-    lines += ["", "## Training Load", ""]
-    for note_row in filter(
-        None,
-        [
-            format_markdown_row(
-                "Training Load", round(training_load, 1) if training_load else None
-            ),
-            format_markdown_row("TRIMP", round(trimp, 1) if trimp else None),
-            format_markdown_row("HR Load", round(hr_load, 1) if hr_load else None),
-            format_markdown_row("Suffer Score", int(suffer) if suffer else None),
-            format_markdown_row(
-                "Session Intensity", f"{round(intensity, 1)}%" if intensity else None
-            ),
-            format_markdown_row("Efficiency Factor", round(ef, 2) if ef else None),
-            format_markdown_row(
-                "Decoupling", f"{round(decoupling, 1)}%" if decoupling else None
-            ),
-            format_markdown_row(
-                "Polarization Index", round(polarization, 2) if polarization else None
-            ),
-            format_markdown_row("CTL (fitness)", round(ctl, 1) if ctl else None),
-            format_markdown_row("ATL (fatigue)", round(atl, 1) if atl else None),
-            format_markdown_row(
-                "TSB (freshness)", round(ctl - atl, 1) if ctl and atl else None
-            ),
-        ],
-    ):
-        lines.append(note_row)
+        )
+    )
 
     if rpe or feel:
         lines += ["", "## Feel", ""]
-        for note_row in filter(
-            None, [format_markdown_row("RPE", rpe), format_markdown_row("Feel", feel)]
-        ):
-            lines.append(note_row)
+        lines.extend(
+            filter(
+                None,
+                [format_markdown_row("RPE", rpe), format_markdown_row("Feel", feel)],
+            )
+        )
 
     if temp_avg is not None:
         lines += ["", "## Conditions", ""]
-        for note_row in filter(
-            None,
-            [
-                format_markdown_row("Temp avg", f"{round(temp_avg, 1)}", "°C"),
-                format_markdown_row(
-                    "Temp min/max",
-                    f"{temp_min}/{temp_max}" if temp_min is not None else None,
-                    "°C",
-                ),
-                format_markdown_row(
-                    "Altitude avg", f"{round(alt_avg, 0):.0f}" if alt_avg else None, "m"
-                ),
-                format_markdown_row(
-                    "Altitude min/max",
-                    f"{alt_min:.0f}/{alt_max:.0f}" if alt_min is not None else None,
-                    "m",
-                ),
-            ],
-        ):
-            lines.append(note_row)
+        lines.extend(
+            filter(
+                None,
+                [
+                    format_markdown_row("Temp avg", f"{round(temp_avg, 1)}", "°C"),
+                    format_markdown_row(
+                        "Temp min/max",
+                        f"{temp_min}/{temp_max}" if temp_min is not None else None,
+                        "°C",
+                    ),
+                    format_markdown_row(
+                        "Altitude avg",
+                        f"{round(alt_avg, 0):.0f}" if alt_avg else None,
+                        "m",
+                    ),
+                    format_markdown_row(
+                        "Altitude min/max",
+                        f"{alt_min:.0f}/{alt_max:.0f}" if alt_min is not None else None,
+                        "m",
+                    ),
+                ],
+            )
+        )
 
     lines += ["", "## Other", ""]
-    for note_row in filter(
-        None,
-        [
-            format_markdown_row("Cadence", int(cadence) if cadence else None),
-            format_markdown_row(
-                "Calories", int(calories) if calories else None, "kcal"
-            ),
-            format_markdown_row("Weight", weight, "kg"),
-            format_markdown_row("Device", device),
-            format_markdown_row("Source", source),
-        ],
-    ):
-        lines.append(note_row)
+    lines.extend(
+        filter(
+            None,
+            [
+                format_markdown_row("Cadence", int(cadence) if cadence else None),
+                format_markdown_row(
+                    "Calories", int(calories) if calories else None, "kcal"
+                ),
+                format_markdown_row("Weight", weight, "kg"),
+                format_markdown_row("Device", device),
+                format_markdown_row("Source", source),
+            ],
+        )
+    )
     if strava_id:
         lines.append(
             f"- **Strava:** [link](https://www.strava.com/activities/{strava_id})  "
@@ -266,32 +286,33 @@ def activity_note(
 
     if weather:
         lines += ["", "## Weather (Open-Meteo)", ""]
-        for note_row in filter(
-            None,
-            [
-                format_markdown_row(
-                    "Temperature",
-                    f"{round(weather['temp'], 1)}"
-                    if weather.get("temp") is not None
-                    else None,
-                    "°C",
-                ),
-                format_markdown_row(
-                    "Wind",
-                    f"{round(weather['wind_speed'], 1)} km/h from {int(weather['wind_dir'])}°"
-                    if weather.get("wind_speed") is not None
-                    else None,
-                ),
-                format_markdown_row(
-                    "Gusts",
-                    f"{round(weather['wind_gust'], 1)}"
-                    if weather.get("wind_gust") is not None
-                    else None,
-                    "km/h",
-                ),
-            ],
-        ):
-            lines.append(note_row)
+        lines.extend(
+            filter(
+                None,
+                [
+                    format_markdown_row(
+                        "Temperature",
+                        f"{round(weather['temp'], 1)}"
+                        if weather.get("temp") is not None
+                        else None,
+                        "°C",
+                    ),
+                    format_markdown_row(
+                        "Wind",
+                        f"{round(weather['wind_speed'], 1)} km/h from {int(weather['wind_dir'])}°"
+                        if weather.get("wind_speed") is not None
+                        else None,
+                    ),
+                    format_markdown_row(
+                        "Gusts",
+                        f"{round(weather['wind_gust'], 1)}"
+                        if weather.get("wind_gust") is not None
+                        else None,
+                        "km/h",
+                    ),
+                ],
+            )
+        )
 
     lines += splits_table(intervals_data, activity_type)
 
@@ -312,15 +333,12 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
         date_str = activity.get("start_date_local", "")[:10]
         if not date_str:
             continue
-        activity_date = datetime.strptime(date_str, "%Y-%m-%d")
-        iso_calendar = activity_date.isocalendar()
-        if iso_calendar[0] == year and iso_calendar[1] == week_num:
+        if iso_year_week(date_str) == (year, week_num):
             week_acts.append(activity)
     if not week_acts:
         return None
 
-    jan4 = date(year, 1, 4)
-    week_start = jan4 + timedelta(weeks=week_num - 1, days=-jan4.weekday())
+    week_start = date.fromisocalendar(year, week_num, 1)  # Monday of the ISO week
     week_end = week_start + timedelta(days=6)
 
     total_dist = sum((a.get("distance", 0) or 0) for a in week_acts) / 1000
