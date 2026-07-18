@@ -42,7 +42,7 @@ def fetch_weather(lat: float, lon: float, start_iso: str):
             "temp": hourly["temperature_2m"][idx],
         }
     except Exception as e:
-        print(f"  ⚠ weather fetch failed: {e}")
+        print(f"  ⚠️  weather fetch failed: {e}")
         return None
 
 

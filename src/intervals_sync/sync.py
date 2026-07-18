@@ -109,7 +109,7 @@ def get_activity(act_id: str) -> dict | None:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except Exception as e:
-        print(f"  ⚠ activity refetch failed for {act_id}: {e}")
+        print(f"  ⚠️  activity refetch failed for {act_id}: {e}")
         return None
 
 
@@ -135,7 +135,7 @@ def set_elevation_correction(act_id: str, value: bool) -> bool:
             resp.read()
         return True
     except Exception as e:
-        print(f"  ⚠ failed to set elevation_correction for {act_id}: {e}")
+        print(f"  ⚠️  failed to set elevation_correction for {act_id}: {e}")
         return False
 
 
@@ -248,7 +248,7 @@ def fetch_intervals(act_id: str) -> dict | None:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except Exception as e:
-        print(f"  ⚠ intervals fetch failed for {act_id}: {e}")
+        print(f"  ⚠️  intervals fetch failed for {act_id}: {e}")
         return None
 
 
