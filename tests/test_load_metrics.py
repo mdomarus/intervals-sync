@@ -82,6 +82,14 @@ class TestAcwr:
         assert "elevated" in acwr_label(1.4)
         assert "high injury risk" in acwr_label(1.6)
 
+    def test_acwr_label_boundaries(self) -> None:
+        # 0.8 is NOT < 0.8, so falls through to optimal
+        assert "optimal" in acwr_label(0.8)
+        # 1.3 is <= 1.3, so optimal
+        assert "optimal" in acwr_label(1.3)
+        # 1.5 is <= 1.5, so elevated
+        assert "elevated" in acwr_label(1.5)
+
 
 class TestRampRate:
     def test_ramp_is_ctl_delta_week_over_week(self) -> None:
@@ -100,6 +108,14 @@ class TestRampRate:
         assert "aggressive" in ramp_rate_label(6.0)
         assert "safe" in ramp_rate_label(3.0)
         assert "detraining" in ramp_rate_label(-1.0)
+
+    def test_ramp_label_boundaries(self) -> None:
+        # 8.0 is NOT > 8.0, so falls through to aggressive
+        assert "aggressive" in ramp_rate_label(8.0)
+        # 5.0 is NOT > 5.0, so falls through to safe
+        assert "safe" in ramp_rate_label(5.0)
+        # 0.0 is >= 0, so safe
+        assert "safe" in ramp_rate_label(0.0)
 
 
 class TestWeekOverWeekLoad:
@@ -139,6 +155,12 @@ class TestMonotonyAndStrain:
         assert "high" in monotony_label(2.5)
         assert "moderate" in monotony_label(1.7)
         assert "good" in monotony_label(1.0)
+
+    def test_monotony_label_boundaries(self) -> None:
+        # 2.0 is NOT > 2.0, so falls through to moderate
+        assert "moderate" in monotony_label(2.0)
+        # 1.5 is NOT > 1.5, so falls through to good
+        assert "good" in monotony_label(1.5)
 
 
 class TestTrendRows:
