@@ -86,7 +86,9 @@ def activity_note(
     cooldown = get_field(activity, "icu_cooldown_time")
     interval_summary = get_field(activity, "interval_summary") or []
 
-    tag_list = ["sport", "activity", activity_type.lower()]
+    tag_list = ["sport", "activity"]
+    if activity_type != "Unknown":
+        tag_list.append(activity_type.lower())
     if race:
         tag_list.append("race")
     if tags:
