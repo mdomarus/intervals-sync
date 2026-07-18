@@ -40,7 +40,11 @@ uv run intervals-sync --force     # regenerate all notes in the window
 
 ### 4. Schedule (macOS)
 
-A launchd plist at `~/Library/LaunchAgents/com.michaldomarus.intervals-sync.plist` runs the sync daily at 07:00.
+```bash
+./install.sh
+```
+
+Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo location), installs it to `~/Library/LaunchAgents/`, and loads it. Runs daily at 07:00; logs go to `~/Library/Logs/intervals-sync.log`.
 
 ## How it works
 
