@@ -4,6 +4,8 @@ from intervals_sync.load_metrics import (
     _week_daily_loads,
     _week_reference_row,
     _week_sunday,
+    acwr,
+    acwr_label,
 )
 from intervals_sync.state import WellnessSeries
 
@@ -51,3 +53,22 @@ class TestWeekLookupHelpers:
             0.0,
             0.0,
         ]
+
+
+class TestAcwr:
+    def test_acwr_is_atl_over_ctl_at_reference_row(self) -> None:
+        series = _series(("2026-07-19", 30.0, 42.0, 0.0))
+        assert acwr(series, 2026, 29) == 1.4
+
+    def test_acwr_none_when_ctl_zero(self) -> None:
+        series = _series(("2026-07-19", 0.0, 10.0, 0.0))
+        assert acwr(series, 2026, 29) is None
+
+    def test_acwr_none_when_no_row(self) -> None:
+        assert acwr(_series(), 2026, 29) is None
+
+    def test_acwr_label_bands(self) -> None:
+        assert "detraining" in acwr_label(0.7)
+        assert "optimal" in acwr_label(1.0)
+        assert "elevated" in acwr_label(1.4)
+        assert "high injury risk" in acwr_label(1.6)
