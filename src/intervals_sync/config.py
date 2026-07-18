@@ -46,6 +46,10 @@ ACWR_ELEVATED_MAX = 1.5
 RAMP_SAFE_MAX = 5.0
 RAMP_AGGRESSIVE_MAX = 8.0
 
+# Week-over-week total-load change, in percent.
+LOAD_WOW_JUMP_PCT = 30.0
+LOAD_WOW_DELOAD_PCT = -30.0
+
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
     "athlete_id": "INTERVALS_ATHLETE_ID",
