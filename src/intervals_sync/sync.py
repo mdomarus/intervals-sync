@@ -86,26 +86,24 @@ def get_headers() -> dict[str, str]:
     }
 
 
-def api_get(path: str) -> Any:
-    url = f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}"
-    req = urllib.request.Request(
-        url,
-        headers=get_headers(),
-    )
+def _request(method: str, url: str, body: dict | None = None) -> Any:
+    data = json.dumps(body).encode() if body is not None else None
+    headers = get_headers()
+    if data is not None:
+        headers = {**headers, "Content-Type": "application/json"}
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
+
+
+def api_get(path: str) -> Any:
+    return _request("GET", f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}")
 
 
 def get_activity(act_id: str) -> dict | None:
     """Fetch a fresh single activity record (e.g. after server-side settings change)."""
     try:
-        url = f"{INTERVALS_API_URL}/activity/{act_id}"
-        req = urllib.request.Request(
-            url,
-            headers=get_headers(),
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        return _request("GET", f"{INTERVALS_API_URL}/activity/{act_id}")
     except Exception as e:
         print(f"  ⚠️  activity refetch failed for {act_id}: {e}")
         return None
@@ -116,16 +114,11 @@ def set_elevation_correction(act_id: str, value: bool) -> bool:
     barometer — consistent with Strava/Garmin. Returns True on success. After PUT the
     server recalculates total_elevation_gain asynchronously."""
     try:
-        url = f"{INTERVALS_API_URL}/activity/{act_id}"
-        data = json.dumps({"use_elevation_correction": value}).encode()
-        req = urllib.request.Request(
-            url,
-            data=data,
-            method="PUT",
-            headers={**get_headers(), "Content-Type": "application/json"},
+        _request(
+            "PUT",
+            f"{INTERVALS_API_URL}/activity/{act_id}",
+            {"use_elevation_correction": value},
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            resp.read()
         return True
     except Exception as e:
         print(f"  ⚠️  failed to set elevation_correction for {act_id}: {e}")
@@ -233,13 +226,7 @@ def hr_zones_summary(zone_times: list | None, zone_limits: list | None) -> str |
 def fetch_intervals(act_id: str) -> dict | None:
     """Fetch detailed splits (WORK/RECOVERY) for an activity."""
     try:
-        url = f"{INTERVALS_API_URL}/activity/{act_id}/intervals"
-        req = urllib.request.Request(
-            url,
-            headers=get_headers(),
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        return _request("GET", f"{INTERVALS_API_URL}/activity/{act_id}/intervals")
     except Exception as e:
         print(f"  ⚠️  intervals fetch failed for {act_id}: {e}")
         return None
