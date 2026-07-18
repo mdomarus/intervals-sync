@@ -4,7 +4,7 @@ import urllib.parse
 from datetime import datetime
 
 
-def fetch_weather(lat: float, lon: float, start_iso: str):
+def fetch_weather(lat: float, lon: float, start_iso: str) -> dict[str, float] | None:
     """Open-Meteo forecast API with past_days — works for today and up to 92 days back."""
     try:
         start_dt = (
@@ -28,8 +28,8 @@ def fetch_weather(lat: float, lon: float, start_iso: str):
         )
         url = f"https://api.open-meteo.com/v1/forecast?{params}"
         with urllib.request.urlopen(url, timeout=30) as resp:
-            data = json.loads(resp.read())
-        hourly = data.get("hourly", {})
+            weather_payload = json.loads(resp.read())
+        hourly = weather_payload.get("hourly", {})
         times = hourly.get("time", [])
         target = start_dt.strftime("%Y-%m-%dT%H:00")
         idx = next((i for i, t in enumerate(times) if t == target), None)
@@ -46,7 +46,7 @@ def fetch_weather(lat: float, lon: float, start_iso: str):
         return None
 
 
-def wind_label(course_deg, wind_from_deg):
+def wind_label(course_deg: float | None, wind_from_deg: float | None) -> str:
     """Relative angle wind→course direction. Wind 'from' = direction wind is blowing from."""
     if course_deg is None or wind_from_deg is None:
         return "—"
