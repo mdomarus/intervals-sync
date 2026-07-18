@@ -252,9 +252,7 @@ def fetch_intervals(act_id: str) -> dict | None:
         return None
 
 
-def splits_table(
-    intervals_data: dict | None, atype: str, weather: dict | None = None
-) -> list[str]:
+def splits_table(intervals_data: dict | None, atype: str) -> list[str]:
     """Buduje tabelę splitów z odpowiedzi /intervals + wiatr per split."""
     if not intervals_data:
         return []
@@ -555,7 +553,7 @@ def activity_note(
         ):
             lines.append(r)
 
-    lines += splits_table(intervals_data, atype, weather)
+    lines += splits_table(intervals_data, atype)
 
     # Interwały (auto-grupy z interval_summary)
     if interval_summary:
