@@ -240,8 +240,10 @@ def load_section_lines(
     rows = trend_rows(series, year, week_num)
     if not bullets and not rows:
         return []
-    lines = ["", "## Load & trend", ""]
-    lines += bullets
+    lines = ["", "## Load & trend"]
+    if bullets:
+        lines.append("")
+        lines += bullets
     if rows:
         lines += _trend_table_lines(rows)
     return lines
