@@ -37,20 +37,40 @@ RUN_TYPES = ("Run", "TrailRun")
 WEATHER_EXCLUDED_TYPES = ("WeightTraining", "Workout", "VirtualRide", "Swim")
 
 # --- Weekly load-metric thresholds (deterministic interpretation labels) ---
-# ACWR (acute:chronic workload ratio = ATL/CTL); Gabbett "sweet spot" bands.
+#
+# ACWR (acute:chronic workload ratio, approximated here as ATL/CTL — the
+# exponentially-weighted variant used by intervals.icu). The 0.8–1.3 "sweet
+# spot" and elevated-risk bands (>1.3 caution, >1.5 high risk) come from:
+#   Gabbett TJ. "The training—injury prevention paradox: should athletes be
+#   training smarter and harder?" Br J Sports Med 2016;50(5):273–280.
+#   doi:10.1136/bjsports-2015-095788
 ACWR_UNDERLOAD_MAX = 0.8
 ACWR_OPTIMAL_MAX = 1.3
 ACWR_ELEVATED_MAX = 1.5
 
-# Ramp rate = week-over-week change in CTL (CTL points per week).
+# Ramp rate = week-over-week change in CTL (Banister/TRIMP fitness model).
+# "Keep CTL rises to roughly 5–8 points per week" is a widely-used COACHING
+# HEURISTIC popularised by TrainingPeaks / Coggan & Allen's Performance
+# Manager Chart — NOT a single controlled study. References: Coggan A, Allen H,
+# "Training and Racing with a Power Meter"; intervals.icu Fitness/Form docs
+# (https://intervals.icu).
 RAMP_SAFE_MAX = 5.0
 RAMP_AGGRESSIVE_MAX = 8.0
 
-# Week-over-week total-load change, in percent.
+# Week-over-week total-load change, in percent. The ±30% band is a pragmatic
+# COACHING HEURISTIC in the same spirit as the ACWR sweet spot — avoid large
+# week-to-week load spikes to reduce injury risk. Related conceptually to the
+# Gabbett 2016 ACWR work above. No single controlled-study citation.
 LOAD_WOW_JUMP_PCT = 30.0
 LOAD_WOW_DELOAD_PCT = -30.0
 
-# Foster training monotony = weekly mean load / population stdev of daily load.
+# Foster training monotony = weekly mean daily load / population SD of daily
+# load; strain = weekly total load × monotony. Concept and metrics from:
+#   Foster C. "Monitoring training in athletes with reference to overtraining
+#   syndrome." Med Sci Sports Exerc 1998;30(7):1164–1168.
+# The >2.0 elevated-risk / 1.5–2.0 moderate / <1.5 good bands are practical
+# guidance derived from that line of work — treat as rule-of-thumb, not a
+# hard clinical boundary.
 MONOTONY_GOOD_MAX = 1.5
 MONOTONY_MODERATE_MAX = 2.0
 
