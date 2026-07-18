@@ -50,6 +50,10 @@ RAMP_AGGRESSIVE_MAX = 8.0
 LOAD_WOW_JUMP_PCT = 30.0
 LOAD_WOW_DELOAD_PCT = -30.0
 
+# Foster training monotony = weekly mean load / population stdev of daily load.
+MONOTONY_GOOD_MAX = 1.5
+MONOTONY_MODERATE_MAX = 2.0
+
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
     "athlete_id": "INTERVALS_ATHLETE_ID",

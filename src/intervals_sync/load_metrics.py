@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from statistics import mean, pstdev
 
 from .config import (
     ACWR_ELEVATED_MAX,
@@ -6,6 +7,8 @@ from .config import (
     ACWR_UNDERLOAD_MAX,
     LOAD_WOW_DELOAD_PCT,
     LOAD_WOW_JUMP_PCT,
+    MONOTONY_GOOD_MAX,
+    MONOTONY_MODERATE_MAX,
     RAMP_AGGRESSIVE_MAX,
     RAMP_SAFE_MAX,
 )
@@ -108,3 +111,27 @@ def week_over_week_label(percent: float) -> str:
     if percent < LOAD_WOW_DELOAD_PCT:
         return "🔵 clear deload"
     return "🟢 normal"
+
+
+def monotony_and_strain(
+    series: WellnessSeries, year: int, week_num: int
+) -> tuple[float, float] | None:
+    """Foster monotony (mean/pstdev of daily load) and strain (sum × monotony).
+
+    None when daily load has zero spread (all seven days equal, including an
+    empty week) — monotony is undefined there."""
+    daily_loads = _week_daily_loads(series, year, week_num)
+    load_spread = pstdev(daily_loads)
+    if load_spread == 0:
+        return None
+    monotony = mean(daily_loads) / load_spread
+    strain = sum(daily_loads) * monotony
+    return round(monotony, 2), round(strain, 0)
+
+
+def monotony_label(value: float) -> str:
+    if value > MONOTONY_MODERATE_MAX:
+        return "🔴 high"
+    if value > MONOTONY_GOOD_MAX:
+        return "🟠 moderate"
+    return "🟢 good variation"
