@@ -9,7 +9,8 @@ from typing import cast
 
 from .api import fetch_intervals, get_activity, set_elevation_correction, api_get
 from .config import ACTIVITIES_DIR, DEFAULT_LAT, DEFAULT_LON, WEEKLY_DIR
-from .notes import activity_note, safe_name, week_summary
+from .formatters import safe_name
+from .notes import activity_note, week_summary
 from .state import Activity, State, load_state, save_state
 from .weather import fetch_weather
 

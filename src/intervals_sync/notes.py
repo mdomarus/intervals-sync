@@ -1,206 +1,98 @@
-import unicodedata
 from datetime import date, datetime, timedelta
-from typing import Mapping
+from typing import Any
 
+from .formatters import (
+    emoji,
+    hms,
+    pace,
+    row,
+    safe_name,
+    speed_kmh,
+    splits_table,
+    val,
+    hr_zones_summary,
+)
 from .state import Activity
 
 
-def hms(total_seconds: int | float | None) -> str:
-    if not total_seconds:
-        return "—"
-    total_seconds = int(total_seconds)
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours}:{minutes:02d}:{seconds:02d}"
-
-
-def pace(dist_m: float | None, time_s: float | None) -> str | None:
-    if not dist_m or not time_s:
-        return None
-    pace_secs_per_km = time_s / (dist_m / 1000)
-    minutes, seconds = divmod(int(pace_secs_per_km), 60)
-    return f"{minutes}:{seconds:02d} /km"
-
-
-def speed_kmh(mps: float | None) -> float | None:
-    if not mps:
-        return None
-    return round(mps * 3.6, 1)
-
-
-def emoji(t: str) -> str:
-    return {
-        "Run": "🏃",
-        "TrailRun": "🏔️",
-        "Ride": "🚴",
-        "MountainBikeRide": "🚵",
-        "GravelRide": "🚵",
-        "Hike": "🥾",
-        "Walk": "🚶",
-        "VirtualRide": "🖥️",
-        "Swim": "🏊",
-        "WeightTraining": "🏋️",
-        "Workout": "💪",
-        "NordicSki": "⛷️",
-    }.get(t, "🏅")
-
-
-def safe_name(text: str) -> str:
-    def keep(c):
-        if c.isalnum() or c in " -_":
-            return True
-        cat = unicodedata.category(c)
-        return cat in ("So", "Sm", "Sk", "Sc")  # emoji and Unicode symbols
-
-    return "".join(c if keep(c) else "_" for c in text)
-
-
-def val(a: Mapping, key: str, default=None):
-    value = a.get(key)
-    return default if value is None else value
-
-
-def row(label: str, value, unit: str = "") -> str | None:
-    if value is None or value == "" or value == "—":
-        return None
-    return f"- **{label}:** {value}{(' ' + unit) if unit else ''}  "
-
-
-def hr_zones_summary(zone_times: list | None, zone_limits: list | None) -> str | None:
-    if not zone_times or not zone_limits:
-        return None
-    total = sum(zone_times)
-    if total == 0:
-        return None
-    labels = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7"]
-    parts = []
-    for zone_idx, (zone_time, zone_limit) in enumerate(zip(zone_times, zone_limits)):
-        if zone_time > 0:
-            pct = round(zone_time / total * 100)
-            mins = zone_time // 60
-            parts.append(f"{labels[zone_idx]} ({zone_limit}+bpm): {mins}min ({pct}%)")
-    return " | ".join(parts)
-
-
-def splits_table(intervals_data: dict | None, atype: str) -> list[str]:
-    """Build a splits table from the /intervals response."""
-    if not intervals_data:
-        return []
-    ivs = intervals_data.get("icu_intervals") or []
-    if not ivs:
-        return []
-    is_run = atype in ("Run", "TrailRun")
-    lines = ["", "## Splits (intervals.icu)", ""]
-    if is_run:
-        hdr = (
-            "| # | Type | Distance | Time | Pace | GAP | HR avg | HR max | Zone | Int |"
-        )
-        sep = "|--:|:---|--------:|-----:|------:|----:|-------:|-------:|-----:|----:|"
-    else:
-        hdr = "| # | Type | Distance | Time | Speed | HR avg | HR max | Zone | Int |"
-        sep = "|--:|:---|--------:|-----:|------:|-------:|-------:|-----:|----:|"
-    lines.append(hdr)
-    lines.append(sep)
-    for idx, iv in enumerate(ivs, 1):
-        interval_type = iv.get("type", "")
-        type_label = (
-            "🟢 WORK"
-            if interval_type == "WORK"
-            else ("⚪ REC" if interval_type == "RECOVERY" else interval_type)
-        )
-        dist = iv.get("distance", 0) or 0
-        moving_time = iv.get("moving_time", 0) or 0
-        hr_avg = int(iv["average_heartrate"]) if iv.get("average_heartrate") else "—"
-        hr_max = int(iv["max_heartrate"]) if iv.get("max_heartrate") else "—"
-        zone = iv.get("zone") or "—"
-        intensity = f"{int(iv['intensity'])}%" if iv.get("intensity") else "—"
-        dist_str = f"{dist / 1000:.2f} km" if dist else "—"
-        time_str = hms(moving_time) if moving_time else "—"
-        if is_run:
-            pace_str = pace(dist, moving_time) or "—"
-            gap_mps = iv.get("gap")
-            gap_str = pace(1000, 1000 / gap_mps) if gap_mps else "—"
-            table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {pace_str} | {gap_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
-        else:
-            speed = speed_kmh(iv.get("average_speed"))
-            speed_str = f"{speed} km/h" if speed else "—"
-            table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {speed_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
-        lines.append(table_row)
-    return lines
-
-
 def activity_note(
-    a: Activity, intervals_data: dict | None = None, weather: dict | None = None
+    activity: Activity,
+    intervals_data: dict[str, Any] | None = None,
+    weather: dict[str, Any] | None = None,
 ) -> str:
-    atype = val(a, "type", "Unknown")
-    act_id = val(a, "id", "")
-    activity_emoji = emoji(atype)
-    name = val(a, "name", "Activity")
-    start_raw = val(a, "start_date_local", "")
+    activity_type = val(activity, "type", "Unknown")
+    act_id = val(activity, "id", "")
+    activity_emoji = emoji(activity_type)
+    name = val(activity, "name", "Activity")
+    start_raw = val(activity, "start_date_local", "")
     start = start_raw[:16].replace("T", " ")
 
-    dist_m = val(a, "distance", 0) or 0
+    dist_m = val(activity, "distance", 0) or 0
     dist_km = round(dist_m / 1000, 2)
-    moving = val(a, "moving_time", 0) or 0
-    elapsed = val(a, "elapsed_time", 0) or 0
-    elev_gain = int(val(a, "total_elevation_gain", 0) or 0)
-    elev_loss = int(val(a, "total_elevation_loss", 0) or 0)
-    alt_avg = val(a, "average_altitude")
-    alt_min = val(a, "min_altitude")
-    alt_max = val(a, "max_altitude")
+    moving = val(activity, "moving_time", 0) or 0
+    elapsed = val(activity, "elapsed_time", 0) or 0
+    elev_gain = int(val(activity, "total_elevation_gain", 0) or 0)
+    elev_loss = int(val(activity, "total_elevation_loss", 0) or 0)
+    alt_avg = val(activity, "average_altitude")
+    alt_min = val(activity, "min_altitude")
+    alt_max = val(activity, "max_altitude")
 
-    hr_avg = val(a, "average_heartrate")
-    hr_max = val(a, "max_heartrate")
-    hr_rest = val(a, "icu_resting_hr")
-    hr_max_athlete = val(a, "athlete_max_hr")
-    lthr = val(a, "lthr")
-    zone_times = val(a, "icu_hr_zone_times")
-    zone_limits = val(a, "icu_hr_zones")
+    hr_avg = val(activity, "average_heartrate")
+    hr_max = val(activity, "max_heartrate")
+    hr_rest = val(activity, "icu_resting_hr")
+    hr_max_athlete = val(activity, "athlete_max_hr")
+    lthr = val(activity, "lthr")
+    zone_times = val(activity, "icu_hr_zone_times")
+    zone_limits = val(activity, "icu_hr_zones")
 
-    cadence = val(a, "average_cadence")
-    power_avg = val(a, "icu_average_watts")
-    power_weighted = val(a, "icu_weighted_avg_watts")
-    ftp = val(a, "icu_ftp")
-    intensity = val(a, "icu_intensity")
-    variability = val(a, "icu_variability_index")
-    decoupling = val(a, "decoupling")
-    ef = val(a, "icu_efficiency_factor")
-    polarization = val(a, "polarization_index")
+    cadence = val(activity, "average_cadence")
+    power_avg = val(activity, "icu_average_watts")
+    power_weighted = val(activity, "icu_weighted_avg_watts")
+    ftp = val(activity, "icu_ftp")
+    intensity = val(activity, "icu_intensity")
+    variability = val(activity, "icu_variability_index")
+    decoupling = val(activity, "decoupling")
+    ef = val(activity, "icu_efficiency_factor")
+    polarization = val(activity, "polarization_index")
 
-    ctl = val(a, "icu_ctl")
-    atl = val(a, "icu_atl")
-    training_load = val(a, "icu_training_load")
-    trimp = val(a, "trimp")
-    hr_load = val(a, "hr_load")
-    suffer = val(a, "suffer_score")
-    rpe = val(a, "icu_rpe") or val(a, "session_rpe") or val(a, "perceived_exertion")
-    feel = val(a, "feel")
+    ctl = val(activity, "icu_ctl")
+    atl = val(activity, "icu_atl")
+    training_load = val(activity, "icu_training_load")
+    trimp = val(activity, "trimp")
+    hr_load = val(activity, "hr_load")
+    suffer = val(activity, "suffer_score")
+    rpe = (
+        val(activity, "icu_rpe")
+        or val(activity, "session_rpe")
+        or val(activity, "perceived_exertion")
+    )
+    feel = val(activity, "feel")
 
-    temp_avg = val(a, "average_temp")
-    temp_min = val(a, "min_temp")
-    temp_max = val(a, "max_temp")
+    temp_avg = val(activity, "average_temp")
+    temp_min = val(activity, "min_temp")
+    temp_max = val(activity, "max_temp")
 
-    calories = val(a, "calories")
-    weight = val(a, "icu_weight")
-    device = val(a, "device_name")
-    source = val(a, "source")
-    strava_id = val(a, "strava_id") or val(a, "id", "")
-    race = val(a, "race", False)
-    description = val(a, "description", "") or ""
-    tags = val(a, "tags") or []
-    warmup = val(a, "icu_warmup_time")
-    cooldown = val(a, "icu_cooldown_time")
-    interval_summary = val(a, "interval_summary") or []
+    calories = val(activity, "calories")
+    weight = val(activity, "icu_weight")
+    device = val(activity, "device_name")
+    source = val(activity, "source")
+    strava_id = val(activity, "strava_id") or val(activity, "id", "")
+    race = val(activity, "race", False)
+    description = val(activity, "description", "") or ""
+    tags = val(activity, "tags") or []
+    warmup = val(activity, "icu_warmup_time")
+    cooldown = val(activity, "icu_cooldown_time")
+    interval_summary = val(activity, "interval_summary") or []
 
-    tag_list = ["sport", "activity", atype.lower()]
+    tag_list = ["sport", "activity", activity_type.lower()]
     if race:
         tag_list.append("race")
     if tags:
         tag_list += tags
 
-    pace_str = pace(dist_m, moving) if atype in ("Run", "TrailRun") else None
-    speed_str = speed_kmh(val(a, "average_speed"))
-    max_speed_str = speed_kmh(val(a, "max_speed"))
+    pace_str = pace(dist_m, moving) if activity_type in ("Run", "TrailRun") else None
+    speed_str = speed_kmh(val(activity, "average_speed"))
+    max_speed_str = speed_kmh(val(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
 
     lines = [
@@ -220,10 +112,10 @@ def activity_note(
         lines.append("> 🏁 **RACE**\n")
 
     lines += ["## Overview", ""]
-    for r in filter(
+    for note_row in filter(
         None,
         [
-            row("Type", atype),
+            row("Type", activity_type),
             row("Date", start),
             row("Distance", f"{dist_km}" if dist_km > 0 else None, "km"),
             row("Time (moving)", hms(moving) if moving else None),
@@ -240,11 +132,11 @@ def activity_note(
             row("Cooldown", hms(cooldown) if cooldown else None),
         ],
     ):
-        lines.append(r)
+        lines.append(note_row)
 
     if hr_avg or hr_max:
         lines += ["", "## Heart Rate", ""]
-        for r in filter(
+        for note_row in filter(
             None,
             [
                 row("HR avg", int(hr_avg) if hr_avg else None, "bpm"),
@@ -254,13 +146,13 @@ def activity_note(
                 row("LTHR", lthr, "bpm"),
             ],
         ):
-            lines.append(r)
+            lines.append(note_row)
         if zones_str:
             lines.append(f"- **HR Zones:** {zones_str}  ")
 
     if power_avg or power_weighted:
         lines += ["", "## Power", ""]
-        for r in filter(
+        for note_row in filter(
             None,
             [
                 row("Power avg", int(power_avg) if power_avg else None, "W"),
@@ -278,10 +170,10 @@ def activity_note(
                 ),
             ],
         ):
-            lines.append(r)
+            lines.append(note_row)
 
     lines += ["", "## Training Load", ""]
-    for r in filter(
+    for note_row in filter(
         None,
         [
             row("Training Load", round(training_load, 1) if training_load else None),
@@ -297,22 +189,16 @@ def activity_note(
             row("TSB (freshness)", round(ctl - atl, 1) if ctl and atl else None),
         ],
     ):
-        lines.append(r)
+        lines.append(note_row)
 
     if rpe or feel:
         lines += ["", "## Feel", ""]
-        for r in filter(
-            None,
-            [
-                row("RPE", rpe),
-                row("Feel", feel),
-            ],
-        ):
-            lines.append(r)
+        for note_row in filter(None, [row("RPE", rpe), row("Feel", feel)]):
+            lines.append(note_row)
 
     if temp_avg is not None:
         lines += ["", "## Conditions", ""]
-        for r in filter(
+        for note_row in filter(
             None,
             [
                 row("Temp avg", f"{round(temp_avg, 1)}", "°C"),
@@ -331,10 +217,10 @@ def activity_note(
                 ),
             ],
         ):
-            lines.append(r)
+            lines.append(note_row)
 
     lines += ["", "## Other", ""]
-    for r in filter(
+    for note_row in filter(
         None,
         [
             row("Cadence", int(cadence) if cadence else None),
@@ -344,7 +230,7 @@ def activity_note(
             row("Source", source),
         ],
     ):
-        lines.append(r)
+        lines.append(note_row)
     if strava_id:
         lines.append(
             f"- **Strava:** [link](https://www.strava.com/activities/{strava_id})  "
@@ -352,7 +238,7 @@ def activity_note(
 
     if weather:
         lines += ["", "## Weather (Open-Meteo)", ""]
-        for r in filter(
+        for note_row in filter(
             None,
             [
                 row(
@@ -377,14 +263,14 @@ def activity_note(
                 ),
             ],
         ):
-            lines.append(r)
+            lines.append(note_row)
 
-    lines += splits_table(intervals_data, atype)
+    lines += splits_table(intervals_data, activity_type)
 
     if interval_summary:
         lines += ["", "## Intervals (auto-groups)", ""]
-        for s in interval_summary:
-            lines.append(f"- {s}")
+        for summary_item in interval_summary:
+            lines.append(f"- {summary_item}")
 
     if description:
         lines += ["", "## Description", "", description]
@@ -399,8 +285,8 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
         if not date_str:
             continue
         activity_date = datetime.strptime(date_str, "%Y-%m-%d")
-        iso = activity_date.isocalendar()
-        if iso[0] == year and iso[1] == week_num:
+        iso_calendar = activity_date.isocalendar()
+        if iso_calendar[0] == year and iso_calendar[1] == week_num:
             week_acts.append(activity)
     if not week_acts:
         return None
@@ -417,13 +303,15 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
     total_cal = sum((a.get("calories", 0) or 0) for a in week_acts)
 
     # CTL/ATL from the last activity of the week
-    sorted_acts = sorted(week_acts, key=lambda x: x.get("start_date_local", ""))
+    sorted_acts = sorted(
+        week_acts, key=lambda activity: activity.get("start_date_local", "")
+    )
     last = sorted_acts[-1]
     ctl = last.get("icu_ctl")
     atl = last.get("icu_atl")
     tsb = round(ctl - atl, 1) if ctl and atl else None
 
-    by_type: dict[str, dict] = {}
+    by_type: dict[str, dict[str, Any]] = {}
     for activity in week_acts:
         activity_type = activity.get("type", "Unknown")
         by_type.setdefault(activity_type, {"count": 0, "dist": 0, "time": 0, "elev": 0})
@@ -468,9 +356,9 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
         lines.append(f"- **TSB (freshness):** {tsb} ({tsb_label})")
 
     lines += ["", "## By type", ""]
-    for t, stats in sorted(by_type.items()):
+    for activity_type, stats in sorted(by_type.items()):
         lines.append(
-            f"- {emoji(t)} **{t}** — {stats['count']}x, "
+            f"- {emoji(activity_type)} **{activity_type}** — {stats['count']}x, "
             f"{round(stats['dist'], 1)} km, {hms(stats['time'])}, {stats['elev']} m"
         )
 
