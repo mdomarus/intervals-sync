@@ -3,6 +3,7 @@ from statistics import pstdev
 
 from intervals_sync.load_metrics import (
     _week_daily_loads,
+    _week_is_partial,
     _week_reference_row,
     _week_sunday,
     acwr,
@@ -223,3 +224,80 @@ class TestLoadSectionLines:
         blob = "\n".join(load_section_lines(series, 2026, 29))
         assert "2026-W29*" in blob
         assert "week in progress" in blob
+
+
+class TestWeekReferenceRowBoundedToItsWeek:
+    """Regression: _week_reference_row must not fall back to a prior week's row."""
+
+    def test_missing_interior_week_returns_none(self) -> None:
+        # W27 Sunday 2026-07-05, W29 Sunday 2026-07-19 — W28 has NO rows.
+        series = _series(
+            ("2026-07-05", 34.0, 30.0, 300.0),  # Sunday W27
+            ("2026-07-13", 36.0, 32.0, 80.0),  # Monday W29 (gap at W28)
+            ("2026-07-19", 38.0, 34.0, 421.0),  # Sunday W29
+        )
+        # W28 spans 2026-07-06 (Mon) to 2026-07-12 (Sun) — no rows in that range.
+        assert _week_reference_row(series, 2026, 28) is None
+
+
+class TestWeekIsPartial:
+    def test_true_when_sunday_beyond_last_series_day(self) -> None:
+        # Last series day is Wednesday of W29; W29 Sunday hasn't happened yet.
+        series = _series(
+            ("2026-07-12", 36.0, 32.0, 358.0),  # Sunday W28
+            ("2026-07-15", 37.0, 33.0, 60.0),  # Wednesday W29
+        )
+        assert _week_is_partial(series, 2026, 29) is True
+
+    def test_false_for_fully_covered_past_week(self) -> None:
+        # Sunday of W29 is in the series — week is complete.
+        series = _series(
+            ("2026-07-12", 36.0, 32.0, 358.0),  # Sunday W28
+            ("2026-07-19", 38.0, 34.0, 421.0),  # Sunday W29
+        )
+        assert _week_is_partial(series, 2026, 29) is False
+
+
+class TestPartialWeekLabelsInMetricBullets:
+    """Regression: WoW and monotony/strain bullets get '(week in progress)';
+    ACWR and ramp bullets do NOT."""
+
+    def test_wow_and_monotony_bullets_carry_partial_note(self) -> None:
+        # Full W28 + data up to Wednesday 2026-07-15 of W29
+        series = _series(
+            ("2026-07-06", 0.0, 0.0, 100.0),  # Monday W28
+            ("2026-07-12", 36.0, 32.0, 358.0),  # Sunday W28
+            ("2026-07-13", 0.0, 0.0, 80.0),  # Monday W29
+            ("2026-07-15", 37.0, 33.0, 60.0),  # Wednesday W29 — last day (partial)
+        )
+        blob = "\n".join(load_section_lines(series, 2026, 29))
+        # WoW and monotony/strain bullets include the suffix
+        assert "Week-over-week load:" in blob
+        assert "Monotony (Foster):" in blob
+        wow_line = next(
+            line for line in blob.splitlines() if "Week-over-week load:" in line
+        )
+        monotony_line = next(
+            line for line in blob.splitlines() if "Monotony (Foster):" in line
+        )
+        assert "(week in progress)" in wow_line
+        assert "(week in progress)" in monotony_line
+
+    def test_acwr_and_ramp_bullets_have_no_partial_note(self) -> None:
+        series = _series(
+            ("2026-07-06", 0.0, 0.0, 100.0),
+            ("2026-07-12", 36.0, 32.0, 358.0),
+            ("2026-07-13", 0.0, 0.0, 80.0),
+            ("2026-07-15", 37.0, 33.0, 60.0),
+        )
+        blob = "\n".join(load_section_lines(series, 2026, 29))
+        acwr_line = next(
+            (line for line in blob.splitlines() if "ACWR (ATL/CTL):" in line), None
+        )
+        ramp_line = next(
+            (line for line in blob.splitlines() if "Ramp rate (ΔCTL):" in line), None
+        )
+        if acwr_line is not None:
+            assert "(week in progress)" not in acwr_line
+        if ramp_line is not None:
+            assert "(week in progress)" not in ramp_line
