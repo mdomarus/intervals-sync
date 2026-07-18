@@ -31,9 +31,14 @@ def _week_activity(**overrides: Any) -> Activity:
 
 class TestWeekSummaryLoadSection:
     def test_no_load_section_without_wellness(self) -> None:
-        summary = week_summary([_week_activity()], 2026, 29)
+        activities = [_week_activity()]
+        summary = week_summary(activities, 2026, 29)
+        summary_explicit_none = week_summary(activities, 2026, 29, None)
         assert summary is not None
         assert "## Load & trend" not in summary
+        # Backward-compat: omitting the arg is byte-identical to passing None,
+        # and neither introduces the section or trailing artifacts.
+        assert summary == summary_explicit_none
 
     def test_load_section_present_with_wellness(self) -> None:
         series: WellnessSeries = [
