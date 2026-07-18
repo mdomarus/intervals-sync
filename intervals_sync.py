@@ -2,12 +2,13 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 import base64
 import glob
 import re
 from datetime import datetime, timedelta, date
-from weather import fetch_weather, wind_label
+from weather import fetch_weather
 from state import load_state, save_state
 
 
@@ -234,7 +235,6 @@ def hr_zones_summary(zone_times, zone_limits):
     return " | ".join(parts)
 
 
-
 def fetch_intervals(act_id: str):
     """Pobiera szczegółowe splity (WORK/RECOVERY) dla aktywności."""
     try:
@@ -258,7 +258,6 @@ def splits_table(intervals_data, atype, weather=None):
     if not ivs:
         return []
     is_run = atype in ("Run", "TrailRun")
-    wind_dir = (weather or {}).get("wind_dir")
     lines = ["", "## Splity (intervals.icu)", ""]
     if is_run:
         hdr = (
@@ -664,8 +663,9 @@ def week_summary(activities, year, week_num):
 def sync(force=False):
     state = load_state()
 
-    if not force and state.get("last_sync"):
-        oldest = datetime.fromisoformat(state["last_sync"]).strftime("%Y-%m-%d")
+    last_sync = state.get("last_sync")
+    if not force and last_sync:
+        oldest = datetime.fromisoformat(last_sync).strftime("%Y-%m-%d")
     else:
         oldest = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
 
