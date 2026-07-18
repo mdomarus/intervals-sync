@@ -12,3 +12,6 @@ __pycache__/
 # Tooling caches
 .mypy_cache/
 .ruff_cache/
+
+# Claude Code
+.claude/
