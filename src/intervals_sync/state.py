@@ -1,6 +1,6 @@
 import os
 import json
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
@@ -58,7 +58,7 @@ class Activity(TypedDict, total=False):
     tags: list[str]
     icu_warmup_time: int
     icu_cooldown_time: int
-    interval_summary: list
+    interval_summary: list[Any]
     average_speed: float
     max_speed: float
     use_elevation_correction: bool
@@ -71,7 +71,10 @@ class State(TypedDict):
 def load_state() -> State:
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Corrupt state file {STATE_FILE}: {e}") from e
     return {"last_sync": None}
 
 
