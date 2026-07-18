@@ -4,6 +4,8 @@ from .config import (
     ACWR_ELEVATED_MAX,
     ACWR_OPTIMAL_MAX,
     ACWR_UNDERLOAD_MAX,
+    LOAD_WOW_DELOAD_PCT,
+    LOAD_WOW_JUMP_PCT,
     RAMP_AGGRESSIVE_MAX,
     RAMP_SAFE_MAX,
 )
@@ -80,3 +82,29 @@ def ramp_rate_label(value: float) -> str:
     if value >= 0:
         return "🟢 safe build"
     return "🔵 detraining / recovery"
+
+
+def week_over_week_load(
+    series: WellnessSeries, year: int, week_num: int
+) -> float | None:
+    """Percent change in summed weekly load vs the previous week.
+
+    None when the previous week has no load to compare against (avoids
+    division by zero and a meaningless "+∞%")."""
+    this_week_total = sum(_week_daily_loads(series, year, week_num))
+    previous_sunday = _week_sunday(year, week_num) - timedelta(days=7)
+    previous_iso = previous_sunday.isocalendar()
+    previous_week_total = sum(
+        _week_daily_loads(series, previous_iso[0], previous_iso[1])
+    )
+    if previous_week_total == 0:
+        return None
+    return round((this_week_total - previous_week_total) / previous_week_total * 100, 0)
+
+
+def week_over_week_label(percent: float) -> str:
+    if percent > LOAD_WOW_JUMP_PCT:
+        return "🟠 large jump vs previous week"
+    if percent < LOAD_WOW_DELOAD_PCT:
+        return "🔵 clear deload"
+    return "🟢 normal"

@@ -8,6 +8,8 @@ from intervals_sync.load_metrics import (
     acwr_label,
     ramp_rate,
     ramp_rate_label,
+    week_over_week_label,
+    week_over_week_load,
 )
 from intervals_sync.state import WellnessSeries
 
@@ -93,3 +95,21 @@ class TestRampRate:
         assert "aggressive" in ramp_rate_label(6.0)
         assert "safe" in ramp_rate_label(3.0)
         assert "detraining" in ramp_rate_label(-1.0)
+
+
+class TestWeekOverWeekLoad:
+    def test_percent_increase_vs_previous_week(self) -> None:
+        series = _series(
+            ("2026-07-06", 0.0, 0.0, 100.0),  # Monday W28, previous-week total 100
+            ("2026-07-13", 0.0, 0.0, 134.0),  # Monday W29, this-week total 134
+        )
+        assert week_over_week_load(series, 2026, 29) == 34.0
+
+    def test_none_when_previous_week_empty(self) -> None:
+        series = _series(("2026-07-13", 0.0, 0.0, 134.0))
+        assert week_over_week_load(series, 2026, 29) is None
+
+    def test_label_bands(self) -> None:
+        assert "large jump" in week_over_week_label(40.0)
+        assert "normal" in week_over_week_label(10.0)
+        assert "deload" in week_over_week_label(-40.0)
