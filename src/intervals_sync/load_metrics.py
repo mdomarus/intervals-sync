@@ -1,5 +1,6 @@
 from datetime import date
 
+from .config import ACWR_ELEVATED_MAX, ACWR_OPTIMAL_MAX, ACWR_UNDERLOAD_MAX
 from .state import WellnessDay, WellnessSeries
 
 
@@ -27,3 +28,26 @@ def _week_daily_loads(series: WellnessSeries, year: int, week_num: int) -> list[
         day_iso = date.fromisocalendar(year, week_num, iso_weekday).isoformat()
         daily_loads.append(load_by_day.get(day_iso, 0.0))
     return daily_loads
+
+
+def acwr(series: WellnessSeries, year: int, week_num: int) -> float | None:
+    """ATL/CTL at the week's reference row. None if no row or CTL is zero."""
+    reference_row = _week_reference_row(series, year, week_num)
+    if reference_row is None:
+        return None
+    chronic_load = reference_row.get("ctl") or 0.0
+    acute_load = reference_row.get("atl") or 0.0
+    if chronic_load == 0:
+        return None
+    return round(acute_load / chronic_load, 2)
+
+
+def acwr_label(value: float) -> str:
+    """Interpret ACWR value per Gabbett "sweet spot" bands with emoji indicators."""
+    if value < ACWR_UNDERLOAD_MAX:
+        return "🟡 detraining / underload"
+    if value <= ACWR_OPTIMAL_MAX:
+        return "🟢 optimal range"
+    if value <= ACWR_ELEVATED_MAX:
+        return "🟠 elevated risk — above sweet-spot (0.8–1.3)"
+    return "🔴 high injury risk"

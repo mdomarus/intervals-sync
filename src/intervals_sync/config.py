@@ -36,6 +36,12 @@ RUN_TYPES = ("Run", "TrailRun")
 # Indoor / GPS-less types that never get a weather lookup.
 WEATHER_EXCLUDED_TYPES = ("WeightTraining", "Workout", "VirtualRide", "Swim")
 
+# --- Weekly load-metric thresholds (deterministic interpretation labels) ---
+# ACWR (acute:chronic workload ratio = ATL/CTL); Gabbett "sweet spot" bands.
+ACWR_UNDERLOAD_MAX = 0.8
+ACWR_OPTIMAL_MAX = 1.3
+ACWR_ELEVATED_MAX = 1.5
+
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
     "athlete_id": "INTERVALS_ATHLETE_ID",
