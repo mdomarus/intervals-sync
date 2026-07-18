@@ -174,13 +174,15 @@ def sync(force: bool = False) -> None:
         weeks_to_update.add(iso_year_week(start))
         print(f"  ✓ {relpath}")
 
-    # Wellness gives daily CTL/ATL/load for load metrics + trend. Fetch once,
-    # reaching WELLNESS_TREND_BUFFER_DAYS before the sync window so the trend
-    # table has prior-week history even on an incremental sync.
-    wellness_oldest = (
-        datetime.fromisoformat(oldest) - timedelta(days=WELLNESS_TREND_BUFFER_DAYS)
-    ).strftime("%Y-%m-%d")
-    wellness_series = fetch_wellness(wellness_oldest, newest)
+    wellness_series = None
+    if weeks_to_update:
+        # Wellness gives daily CTL/ATL/load for load metrics + trend. Fetch once,
+        # reaching WELLNESS_TREND_BUFFER_DAYS before the sync window so the trend
+        # table has prior-week history even on an incremental sync.
+        wellness_oldest = (
+            datetime.fromisoformat(oldest) - timedelta(days=WELLNESS_TREND_BUFFER_DAYS)
+        ).strftime("%Y-%m-%d")
+        wellness_series = fetch_wellness(wellness_oldest, newest)
 
     for year, week_num in weeks_to_update:
         summary = week_summary(

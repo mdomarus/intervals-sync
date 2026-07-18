@@ -56,8 +56,10 @@ MONOTONY_MODERATE_MAX = 2.0
 
 # How many trailing ISO weeks the weekly-summary trend table shows.
 TREND_WEEKS = 6
-# Extra days fetched before the sync window so the trend table has history.
-WELLNESS_TREND_BUFFER_DAYS = 49
+# Days fetched before the sync window so the trend table has prior-week history:
+# TREND_WEEKS weeks of rows, plus one extra week so the oldest row's ramp (ΔCTL
+# vs the week before it) has a reference row to compare against.
+WELLNESS_TREND_BUFFER_DAYS = TREND_WEEKS * 7 + 7
 
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
