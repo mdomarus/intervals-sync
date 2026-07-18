@@ -124,12 +124,7 @@ def set_elevation_correction(act_id: str, value: bool) -> bool:
             url,
             data=data,
             method="PUT",
-            headers={
-                "Authorization": f"Basic {get_creds()}",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 intervals-sync",
-            },
+            headers={**get_headers(), "Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             resp.read()
