@@ -7,6 +7,7 @@ from intervals_sync.load_metrics import (
     _week_sunday,
     acwr,
     acwr_label,
+    load_section_lines,
     monotony_and_strain,
     monotony_label,
     ramp_rate,
@@ -166,3 +167,37 @@ class TestTrendRows:
         series = _series(("2026-07-19", 38.0, 30.0, 421.0))  # only W29
         rows = trend_rows(series, 2026, 29)
         assert [row["week"] for row in rows] == ["2026-W29"]
+
+
+class TestLoadSectionLines:
+    def test_empty_when_series_none(self) -> None:
+        assert load_section_lines(None, 2026, 29) == []
+
+    def test_empty_when_series_has_no_usable_week(self) -> None:
+        series = _series(("2026-07-25", 40.0, 30.0, 0.0))  # after W29 Sunday
+        assert load_section_lines(series, 2026, 29) == []
+
+    def test_renders_heading_metrics_and_trend(self) -> None:
+        series = _series(
+            ("2026-07-05", 34.0, 30.0, 300.0),
+            ("2026-07-12", 36.0, 32.0, 358.0),
+            ("2026-07-13", 0.0, 0.0, 82.0),
+            ("2026-07-16", 0.0, 0.0, 32.0),
+            ("2026-07-19", 38.0, 42.0, 100.0),
+        )
+        lines = load_section_lines(series, 2026, 29)
+        blob = "\n".join(lines)
+        assert "## Load & trend" in blob
+        assert "ACWR (ATL/CTL):" in blob
+        assert "Ramp rate (ΔCTL):" in blob
+        assert "### Trend" in blob
+        assert "| Week" in blob
+
+    def test_partial_week_marked_with_star_and_footnote(self) -> None:
+        series = _series(
+            ("2026-07-12", 36.0, 32.0, 358.0),
+            ("2026-07-15", 37.0, 33.0, 60.0),  # mid-week W29
+        )
+        blob = "\n".join(load_section_lines(series, 2026, 29))
+        assert "2026-W29*" in blob
+        assert "week in progress" in blob

@@ -175,3 +175,73 @@ def trend_rows(series: WellnessSeries, year: int, week_num: int) -> list[TrendRo
             }
         )
     return rows
+
+
+def _format_ramp(value: float) -> str:
+    """Signed ramp value, e.g. '+6.2' / '-0.8'."""
+    return f"+{value}" if value >= 0 else f"{value}"
+
+
+def _metric_bullets(series: WellnessSeries, year: int, week_num: int) -> list[str]:
+    bullets: list[str] = []
+    acwr_value = acwr(series, year, week_num)
+    if acwr_value is not None:
+        bullets.append(f"- **ACWR (ATL/CTL):** {acwr_value} {acwr_label(acwr_value)}")
+    ramp_value = ramp_rate(series, year, week_num)
+    if ramp_value is not None:
+        bullets.append(
+            f"- **Ramp rate (ΔCTL):** {_format_ramp(ramp_value)}/wk "
+            f"{ramp_rate_label(ramp_value)}"
+        )
+    wow_value = week_over_week_load(series, year, week_num)
+    if wow_value is not None:
+        bullets.append(
+            f"- **Week-over-week load:** {_format_ramp(wow_value)}% "
+            f"{week_over_week_label(wow_value)}"
+        )
+    monotony_strain = monotony_and_strain(series, year, week_num)
+    if monotony_strain is not None:
+        monotony, strain = monotony_strain
+        bullets.append(
+            f"- **Monotony (Foster):** {monotony} {monotony_label(monotony)} · "
+            f"**Strain:** {int(strain)}"
+        )
+    return bullets
+
+
+def _trend_table_lines(rows: list[TrendRow]) -> list[str]:
+    lines = [
+        "",
+        f"### Trend (last {TREND_WEEKS} wk)",
+        "",
+        "| Week | CTL | Load | Ramp |",
+        "|------|-----|------|------|",
+    ]
+    has_partial = False
+    for row in rows:
+        week_label = f"{row['week']}*" if row["partial"] else row["week"]
+        has_partial = has_partial or row["partial"]
+        ramp_cell = "—" if row["ramp"] is None else _format_ramp(row["ramp"])
+        lines.append(
+            f"| {week_label} | {row['ctl']} | {int(row['load'])} | {ramp_cell} |"
+        )
+    if has_partial:
+        lines += ["", "*\\* week in progress*"]
+    return lines
+
+
+def load_section_lines(
+    series: WellnessSeries | None, year: int, week_num: int
+) -> list[str]:
+    """Markdown lines for the '## Load & trend' section, or [] when nothing to show."""
+    if not series:
+        return []
+    bullets = _metric_bullets(series, year, week_num)
+    rows = trend_rows(series, year, week_num)
+    if not bullets and not rows:
+        return []
+    lines = ["", "## Load & trend", ""]
+    lines += bullets
+    if rows:
+        lines += _trend_table_lines(rows)
+    return lines
