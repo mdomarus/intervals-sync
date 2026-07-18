@@ -7,10 +7,17 @@ import urllib.error
 from datetime import datetime, timedelta
 from typing import cast
 
-from .api import api_get, fetch_intervals, get_activity, set_elevation_correction
+from .api import (
+    api_get,
+    fetch_intervals,
+    fetch_wellness,
+    get_activity,
+    set_elevation_correction,
+)
 from .config import (
     LOOKBACK_DAYS,
     WEATHER_EXCLUDED_TYPES,
+    WELLNESS_TREND_BUFFER_DAYS,
     ConfigError,
     get_settings,
 )
@@ -167,11 +174,22 @@ def sync(force: bool = False) -> None:
         weeks_to_update.add(iso_year_week(start))
         print(f"  ✓ {relpath}")
 
+    wellness_series = None
+    if weeks_to_update:
+        # Wellness gives daily CTL/ATL/load for load metrics + trend. Fetch once,
+        # reaching WELLNESS_TREND_BUFFER_DAYS before the sync window so the trend
+        # table has prior-week history even on an incremental sync.
+        wellness_oldest = (
+            datetime.fromisoformat(oldest) - timedelta(days=WELLNESS_TREND_BUFFER_DAYS)
+        ).strftime("%Y-%m-%d")
+        wellness_series = fetch_wellness(wellness_oldest, newest)
+
     for year, week_num in weeks_to_update:
         summary = week_summary(
             [activity for activity in activities if activity.get("type") != "Walk"],
             year,
             week_num,
+            wellness_series,
         )
         if summary:
             weekly_note_path = f"{weekly_dir}/{year}-W{week_num:02d}-sport.md"

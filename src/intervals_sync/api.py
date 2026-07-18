@@ -6,7 +6,7 @@ import urllib.request
 from typing import Any, cast
 
 from .config import HTTP_TIMEOUT_SECONDS, INTERVALS_API_URL, get_settings
-from .state import Activity
+from .state import Activity, WellnessSeries
 
 
 def get_headers() -> dict[str, str]:
@@ -77,4 +77,22 @@ def fetch_intervals(act_id: str) -> dict[str, Any] | None:
         json.JSONDecodeError,
     ) as e:
         print(f"  ⚠️  intervals fetch failed for {act_id}: {e}")
+        return None
+
+
+def fetch_wellness(oldest: str, newest: str) -> WellnessSeries | None:
+    """Daily wellness rows (CTL/ATL/atlLoad per day) for the date range.
+
+    Returns None on network/parse failure so the caller can render weekly
+    summaries without the load section instead of aborting the sync."""
+    try:
+        return cast(
+            WellnessSeries, api_get(f"wellness?oldest={oldest}&newest={newest}")
+        )
+    except (
+        urllib.error.URLError,
+        http.client.IncompleteRead,
+        json.JSONDecodeError,
+    ) as wellness_error:
+        print(f"  ⚠️  wellness fetch failed: {wellness_error}")
         return None
