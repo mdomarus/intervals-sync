@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keep GitHub Actions used in workflows up to date (security + runtime bumps).
+  # Only ecosystem enabled: the project has no runtime dependencies, and uv is
+  # not supported by Dependabot's pip ecosystem.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      # Bundle all action bumps into a single PR to reduce noise.
+      github-actions:
+        patterns:
+          - "*"
