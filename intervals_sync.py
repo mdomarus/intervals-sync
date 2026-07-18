@@ -1,30 +1,48 @@
 #!/usr/bin/env python3
-"""
-intervals.icu → Obsidian sync
-- Pobiera aktywności z intervals.icu
-- Tworzy notatki per aktywność w Human/02_life/sport/activities/
-- Tworzy tygodniowe podsumowania w Machine/reports/weekly/
-"""
 
-import json, os, sys, time, urllib.request, urllib.parse, urllib.error, base64, math, glob, re
+import json
+import os
+import sys
+import time
+import urllib.request
+import urllib.parse
+import urllib.error
+import base64
+import math
+import glob
+import re
 from datetime import datetime, timedelta, date
+
 
 def _load_secrets():
     """athlete_id + api_key z gitignorowanego secrets.json obok skryptu
-    (fallback: zmienne środowiskowe INTERVALS_ATHLETE_ID / INTERVALS_API_KEY)."""
+    (fallback: zmienne środowiskowe INTERVALS_ATHLETE_ID / INTERVALS_API_KEY, INTERVALS_VAULT_PATH)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json")
     if os.path.exists(path):
         with open(path) as f:
             s = json.load(f)
-        return s["athlete_id"], s["api_key"]
-    return os.environ["INTERVALS_ATHLETE_ID"], os.environ["INTERVALS_API_KEY"]
+        return (
+            s["athlete_id"],
+            s["api_key"],
+            s["activities_dir"],
+            s["weekly_dir"],
+        )
+    return (
+        os.environ["INTERVALS_ATHLETE_ID"],
+        os.environ["INTERVALS_API_KEY"],
+        os.environ["INTERVALS_ACTIVITIES_DIR"],
+        os.environ["INTERVALS_WEEKLY_DIR"],
+    )
 
-ATHLETE_ID, API_KEY = _load_secrets()
-VAULT = "/Users/michaldomarus/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault"
-ACTIVITIES_DIR = f"{VAULT}/Human/02_life/sport/activities"
-WEEKLY_DIR = f"{VAULT}/Machine/reports/weekly"
+
+INTERVALS_API_URL = "https://intervals.icu/api/v1"
+ATHLETE_ID, API_KEY, ACTIVITIES_DIR, WEEKLY_DIR = _load_secrets()
 STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
-DEFAULT_LAT, DEFAULT_LON = 54.5189, 18.5305  # Gdynia — fallback gdy aktywność nie ma GPS
+DEFAULT_LAT, DEFAULT_LON = (
+    54.5189,
+    18.5305,
+)  # Gdynia — fallback gdy aktywność nie ma GPS
+
 
 def write_text_safe(path, content, retries=4, delay=1.5):
     """Atomowy, odporny na iCloud zapis pliku.
@@ -49,7 +67,8 @@ def write_text_safe(path, content, retries=4, delay=1.5):
         except OSError as e:
             last = e
             try:
-                if os.path.exists(tmp): os.remove(tmp)
+                if os.path.exists(tmp):
+                    os.remove(tmp)
             except OSError:
                 pass
             if attempt < retries - 1:
@@ -57,34 +76,61 @@ def write_text_safe(path, content, retries=4, delay=1.5):
     print(f"  ⚠️  nie udało się zapisać {os.path.basename(path)}: {last}")
     return False
 
-def api_get(path):
-    url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/{path}"
+
+def api_get(path: str):
+    url = f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}"
     creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-    req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 intervals-sync"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Basic {creds}",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 intervals-sync",
+        },
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
 
-def get_activity(act_id):
+
+def get_activity(act_id: str):
     """Świeży pojedynczy rekord aktywności (np. po zmianie ustawień serwerowych)."""
     try:
-        url = f"https://intervals.icu/api/v1/activity/{act_id}"
+        url = f"{INTERVALS_API_URL}/activity/{act_id}"
         creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-        req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 intervals-sync"})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Basic {creds}",
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 intervals-sync",
+            },
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except Exception as e:
         print(f"  ⚠ activity refetch failed for {act_id}: {e}")
         return None
 
-def set_elevation_correction(act_id, value):
+
+def set_elevation_correction(act_id: str, value: bool):
     """Wyłącza/włącza korektę elewacji intervals.icu (DEM). Wyłączona = zegarek
     (barometr) — wartość zgodna ze Stravą/Garminem, której ufa Michał. Zwraca
     True przy sukcesie. Po PUT serwer przelicza total_elevation_gain asynchronicznie."""
     try:
-        url = f"https://intervals.icu/api/v1/activity/{act_id}"
+        url = f"{INTERVALS_API_URL}/activity/{act_id}"
         creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
         data = json.dumps({"use_elevation_correction": value}).encode()
-        req = urllib.request.Request(url, data=data, method="PUT", headers={"Authorization": f"Basic {creds}", "Accept": "application/json", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 intervals-sync"})
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method="PUT",
+            headers={
+                "Authorization": f"Basic {creds}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 intervals-sync",
+            },
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             resp.read()
         return True
@@ -92,33 +138,58 @@ def set_elevation_correction(act_id, value):
         print(f"  ⚠ nie udało się ustawić elevation_correction dla {act_id}: {e}")
         return False
 
+
 def hms(s):
-    if not s: return "—"
-    s = int(s); h, r = divmod(s, 3600); m, sec = divmod(r, 60)
+    if not s:
+        return "—"
+    s = int(s)
+    h, r = divmod(s, 3600)
+    m, sec = divmod(r, 60)
     return f"{h}:{m:02d}:{sec:02d}"
 
+
 def pace(dist_m, time_s):
-    if not dist_m or not time_s: return None
-    ps = time_s / (dist_m / 1000); m, s = divmod(int(ps), 60)
+    if not dist_m or not time_s:
+        return None
+    ps = time_s / (dist_m / 1000)
+    m, s = divmod(int(ps), 60)
     return f"{m}:{s:02d} /km"
 
+
 def speed_kmh(mps):
-    if not mps: return None
+    if not mps:
+        return None
     return round(mps * 3.6, 1)
 
+
 def emoji(t):
-    return {"Run":"🏃","TrailRun":"🏔️","Ride":"🚴","MountainBikeRide":"🚵",
-            "GravelRide":"🚵","Hike":"🥾","Walk":"🚶","VirtualRide":"🖥️",
-            "Swim":"🏊","WeightTraining":"🏋️","Workout":"💪","NordicSki":"⛷️"}.get(t,"🏅")
+    return {
+        "Run": "🏃",
+        "TrailRun": "🏔️",
+        "Ride": "🚴",
+        "MountainBikeRide": "🚵",
+        "GravelRide": "🚵",
+        "Hike": "🥾",
+        "Walk": "🚶",
+        "VirtualRide": "🖥️",
+        "Swim": "🏊",
+        "WeightTraining": "🏋️",
+        "Workout": "💪",
+        "NordicSki": "⛷️",
+    }.get(t, "🏅")
+
 
 def safe_name(s):
     import unicodedata
+
     def keep(c):
         if c.isalnum() or c in " -_":
             return True
         cat = unicodedata.category(c)
         return cat in ("So", "Sm", "Sk", "Sc")  # emoji i symbole Unicode
+
     return "".join(c if keep(c) else "_" for c in s)
+
 
 def scan_existing_notes():
     """Mapa {activity_id: relpath} z frontmattera istniejących notatek.
@@ -138,27 +209,37 @@ def scan_existing_notes():
             out[m.group(1)] = os.path.relpath(p, ACTIVITIES_DIR)
     return out
 
+
 def load_state():
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f: return json.load(f)
+        with open(STATE_FILE) as f:
+            return json.load(f)
     return {"synced_ids": [], "paths": {}, "last_sync": None}
 
+
 def save_state(state):
-    with open(STATE_FILE, "w") as f: json.dump(state, f, indent=2)
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+
 
 def val(a, key, default=None):
     v = a.get(key)
     return default if v is None else v
 
+
 def row(label, value, unit=""):
-    if value is None or value == "" or value == "—": return None
+    if value is None or value == "" or value == "—":
+        return None
     return f"- **{label}:** {value}{(' ' + unit) if unit else ''}  "
 
+
 def hr_zones_summary(zone_times, zone_limits):
-    if not zone_times or not zone_limits: return None
+    if not zone_times or not zone_limits:
+        return None
     total = sum(zone_times)
-    if total == 0: return None
-    labels = ["Z1","Z2","Z3","Z4","Z5","Z6","Z7"]
+    if total == 0:
+        return None
+    labels = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7"]
     parts = []
     for i, (t, lim) in enumerate(zip(zone_times, zone_limits)):
         if t > 0:
@@ -167,12 +248,20 @@ def hr_zones_summary(zone_times, zone_limits):
             parts.append(f"{labels[i]} ({lim}+bpm): {mins}min ({pct}%)")
     return " | ".join(parts)
 
-def fetch_streams(act_id):
+
+def fetch_streams(act_id: str):
     """Pobiera streams (time, latlng) — używane do obliczenia bearing per split."""
     try:
-        url = f"https://intervals.icu/api/v1/activity/{act_id}/streams"
+        url = f"{INTERVALS_API_URL}/activity/{act_id}/streams"
         creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-        req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 intervals-sync"})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Basic {creds}",
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 intervals-sync",
+            },
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read())
         return {s.get("type"): s.get("data") for s in data}
@@ -180,18 +269,29 @@ def fetch_streams(act_id):
         print(f"  ⚠ streams fetch failed for {act_id}: {e}")
         return {}
 
+
 def fetch_weather(lat, lon, start_iso):
     """Open-Meteo forecast API z past_days — działa dla dzisiaj i do 92 dni wstecz."""
     try:
-        start_dt = datetime.fromisoformat(start_iso.replace("Z", "+00:00")) if "T" in start_iso else datetime.strptime(start_iso[:10], "%Y-%m-%d")
+        start_dt = (
+            datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+            if "T" in start_iso
+            else datetime.strptime(start_iso[:10], "%Y-%m-%d")
+        )
         days_back = max(1, (datetime.now() - start_dt).days + 1)
-        if days_back > 92: return None
-        params = urllib.parse.urlencode({
-            "latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
-            "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m",
-            "wind_speed_unit": "kmh", "timezone": "auto",
-            "past_days": days_back, "forecast_days": 1,
-        })
+        if days_back > 92:
+            return None
+        params = urllib.parse.urlencode(
+            {
+                "latitude": f"{lat:.4f}",
+                "longitude": f"{lon:.4f}",
+                "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m",
+                "wind_speed_unit": "kmh",
+                "timezone": "auto",
+                "past_days": days_back,
+                "forecast_days": 1,
+            }
+        )
         url = f"https://api.open-meteo.com/v1/forecast?{params}"
         with urllib.request.urlopen(url, timeout=30) as resp:
             data = json.loads(resp.read())
@@ -199,7 +299,8 @@ def fetch_weather(lat, lon, start_iso):
         times = hourly.get("time", [])
         target = start_dt.strftime("%Y-%m-%dT%H:00")
         idx = next((i for i, t in enumerate(times) if t == target), None)
-        if idx is None: return None
+        if idx is None:
+            return None
         return {
             "wind_speed": hourly["wind_speed_10m"][idx],
             "wind_dir": hourly["wind_direction_10m"][idx],
@@ -210,6 +311,7 @@ def fetch_weather(lat, lon, start_iso):
         print(f"  ⚠ weather fetch failed: {e}")
         return None
 
+
 def bearing(lat1, lon1, lat2, lon2):
     """Bearing (kierunek ruchu) w stopniach, 0=N, 90=E."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -218,47 +320,69 @@ def bearing(lat1, lon1, lat2, lon2):
     x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dlon)
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
+
 def wind_label(course_deg, wind_from_deg):
     """Względny kąt wiatr→kierunek biegu. Wind 'from' = skąd wieje."""
-    if course_deg is None or wind_from_deg is None: return "—"
+    if course_deg is None or wind_from_deg is None:
+        return "—"
     rel = ((course_deg - wind_from_deg + 540) % 360) - 180
     a = abs(rel)
-    if a < 30: return f"⬆️ head ({a:.0f}°)"
-    if a > 150: return f"⬇️ tail ({180-a:.0f}°)"
+    if a < 30:
+        return f"⬆️ head ({a:.0f}°)"
+    if a > 150:
+        return f"⬇️ tail ({180 - a:.0f}°)"
     side = "↗" if rel > 0 else "↖"
-    if a < 60: return f"{side} head-cross"
-    if a > 120: return f"{side} tail-cross"
+    if a < 60:
+        return f"{side} head-cross"
+    if a > 120:
+        return f"{side} tail-cross"
     return f"{side} cross"
+
 
 def fetch_intervals(act_id):
     """Pobiera szczegółowe splity (WORK/RECOVERY) dla aktywności."""
     try:
-        url = f"https://intervals.icu/api/v1/activity/{act_id}/intervals"
+        url = f"{INTERVALS_API_URL}/activity/{act_id}/intervals"
         creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-        req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 intervals-sync"})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Basic {creds}",
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 intervals-sync",
+            },
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except Exception as e:
         print(f"  ⚠ intervals fetch failed for {act_id}: {e}")
         return None
 
+
 def split_bearing(latlng, time_stream, start_index, moving_time):
     """Bearing splitu na podstawie latlng od start_index do start_index+moving_time."""
-    if not latlng or not time_stream: return None
+    if not latlng or not time_stream:
+        return None
     n = len(latlng)
-    if start_index >= n: return None
+    if start_index >= n:
+        return None
     end = min(start_index + moving_time, n - 1)
-    if end <= start_index: return None
+    if end <= start_index:
+        return None
     lat1, lon1 = latlng[start_index]
     lat2, lon2 = latlng[end]
-    if lat1 == lat2 and lon1 == lon2: return None
+    if lat1 == lat2 and lon1 == lon2:
+        return None
     return bearing(lat1, lon1, lat2, lon2)
+
 
 def splits_table(intervals_data, atype, streams=None, weather=None):
     """Buduje tabelę splitów z odpowiedzi /intervals + wiatr per split."""
-    if not intervals_data: return []
+    if not intervals_data:
+        return []
     ivs = intervals_data.get("icu_intervals") or []
-    if not ivs: return []
+    if not ivs:
+        return []
     is_run = atype in ("Run", "TrailRun")
     latlng = (streams or {}).get("latlng")
     time_stream = (streams or {}).get("time")
@@ -266,7 +390,9 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
     show_wind = bool(latlng and wind_dir is not None)
     lines = ["", "## Splity (intervals.icu)", ""]
     if is_run:
-        hdr = "| # | Typ | Dystans | Czas | Tempo | GAP | HR avg | HR max | Zone | Int |"
+        hdr = (
+            "| # | Typ | Dystans | Czas | Tempo | GAP | HR avg | HR max | Zone | Int |"
+        )
         sep = "|--:|:---|--------:|-----:|------:|----:|-------:|-------:|-----:|----:|"
     else:
         hdr = "| # | Typ | Dystans | Czas | Speed | HR avg | HR max | Zone | Int |"
@@ -274,7 +400,8 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
     if show_wind:
         hdr += " Wiatr |"
         sep += "------|"
-    lines.append(hdr); lines.append(sep)
+    lines.append(hdr)
+    lines.append(sep)
     for i, iv in enumerate(ivs, 1):
         t = iv.get("type", "")
         t_short = "🟢 WORK" if t == "WORK" else ("⚪ REC" if t == "RECOVERY" else t)
@@ -284,12 +411,12 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
         hrx = int(iv["max_heartrate"]) if iv.get("max_heartrate") else "—"
         z = iv.get("zone") or "—"
         intens = f"{int(iv['intensity'])}%" if iv.get("intensity") else "—"
-        dist_s = f"{dist/1000:.2f} km" if dist else "—"
+        dist_s = f"{dist / 1000:.2f} km" if dist else "—"
         time_s = hms(mt) if mt else "—"
         if is_run:
             p = pace(dist, mt) or "—"
             gap_mps = iv.get("gap")
-            gap_s = pace(1000, 1000/gap_mps) if gap_mps else "—"
+            gap_s = pace(1000, 1000 / gap_mps) if gap_mps else "—"
             row = f"| {i} | {t_short} | {dist_s} | {time_s} | {p} | {gap_s} | {hr} | {hrx} | Z{z} | {intens} |"
         else:
             sp = speed_kmh(iv.get("average_speed"))
@@ -300,6 +427,7 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
             row += f" {wind_label(crs, wind_dir)} |"
         lines.append(row)
     return lines
+
 
 def activity_note(a, intervals_data=None, streams=None, weather=None):
     atype = val(a, "type", "Unknown")
@@ -364,118 +492,199 @@ def activity_note(a, intervals_data=None, streams=None, weather=None):
     interval_summary = val(a, "interval_summary") or []
 
     tag_list = ["sport", "activity", atype.lower()]
-    if race: tag_list.append("race")
-    if tags: tag_list += tags
+    if race:
+        tag_list.append("race")
+    if tags:
+        tag_list += tags
 
-    pace_str = pace(dist_m, moving) if atype in ("Run","TrailRun") else None
+    pace_str = pace(dist_m, moving) if atype in ("Run", "TrailRun") else None
     speed_str = speed_kmh(val(a, "average_speed"))
     max_speed_str = speed_kmh(val(a, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
 
     lines = [
-        "---", "type: note", "status: active",
-        f"tags: [{', '.join(tag_list)}]", "area: life",
+        "---",
+        "type: note",
+        "status: active",
+        f"tags: [{', '.join(tag_list)}]",
+        "area: life",
         f"activity_id: {act_id}",
-        f"date created: {start}", "---", "",
-        f"# {em} {name}", "",
+        f"date created: {start}",
+        "---",
+        "",
+        f"# {em} {name}",
+        "",
     ]
-    if race: lines.append("> 🏁 **WYŚCIG**\n")
+    if race:
+        lines.append("> 🏁 **WYŚCIG**\n")
 
     # Podstawowe
     lines += ["## Podstawowe", ""]
-    for r in filter(None, [
-        row("Typ", atype),
-        row("Data", start),
-        row("Dystans", f"{dist_km}" if dist_km > 0 else None, "km"),
-        row("Czas (moving)", hms(moving) if moving else None),
-        row("Czas (elapsed)", hms(elapsed) if elapsed and elapsed != moving else None),
-        row("Tempo", pace_str),
-        row("Prędkość avg", speed_str, "km/h"),
-        row("Prędkość max", max_speed_str, "km/h"),
-        row("Przewyższenie ↑", elev_gain if elev_gain > 0 else None, "m D+"),
-        row("Przewyższenie ↓", elev_loss if elev_loss > 0 else None, "m D-"),
-        row("Warmup", hms(warmup) if warmup else None),
-        row("Cooldown", hms(cooldown) if cooldown else None),
-    ]): lines.append(r)
+    for r in filter(
+        None,
+        [
+            row("Typ", atype),
+            row("Data", start),
+            row("Dystans", f"{dist_km}" if dist_km > 0 else None, "km"),
+            row("Czas (moving)", hms(moving) if moving else None),
+            row(
+                "Czas (elapsed)",
+                hms(elapsed) if elapsed and elapsed != moving else None,
+            ),
+            row("Tempo", pace_str),
+            row("Prędkość avg", speed_str, "km/h"),
+            row("Prędkość max", max_speed_str, "km/h"),
+            row("Przewyższenie ↑", elev_gain if elev_gain > 0 else None, "m D+"),
+            row("Przewyższenie ↓", elev_loss if elev_loss > 0 else None, "m D-"),
+            row("Warmup", hms(warmup) if warmup else None),
+            row("Cooldown", hms(cooldown) if cooldown else None),
+        ],
+    ):
+        lines.append(r)
 
     # Tętno
     if hr_avg or hr_max:
         lines += ["", "## Tętno", ""]
-        for r in filter(None, [
-            row("HR avg", int(hr_avg) if hr_avg else None, "bpm"),
-            row("HR max", int(hr_max) if hr_max else None, "bpm"),
-            row("HR spoczynkowy", hr_rest, "bpm"),
-            row("HR max (atlet)", hr_max_athlete, "bpm"),
-            row("LTHR", lthr, "bpm"),
-        ]): lines.append(r)
+        for r in filter(
+            None,
+            [
+                row("HR avg", int(hr_avg) if hr_avg else None, "bpm"),
+                row("HR max", int(hr_max) if hr_max else None, "bpm"),
+                row("HR spoczynkowy", hr_rest, "bpm"),
+                row("HR max (atlet)", hr_max_athlete, "bpm"),
+                row("LTHR", lthr, "bpm"),
+            ],
+        ):
+            lines.append(r)
         if zones_str:
             lines.append(f"- **Strefy HR:** {zones_str}  ")
 
     # Moc (jeśli dostępna)
     if power_avg or power_weighted:
         lines += ["", "## Moc", ""]
-        for r in filter(None, [
-            row("Moc avg", int(power_avg) if power_avg else None, "W"),
-            row("Moc ważona (NP)", int(power_weighted) if power_weighted else None, "W"),
-            row("FTP", ftp, "W"),
-            row("Intensity Factor", round(intensity/100, 2) if intensity else None),
-            row("Variability Index", round(variability, 2) if variability else None),
-        ]): lines.append(r)
+        for r in filter(
+            None,
+            [
+                row("Moc avg", int(power_avg) if power_avg else None, "W"),
+                row(
+                    "Moc ważona (NP)",
+                    int(power_weighted) if power_weighted else None,
+                    "W",
+                ),
+                row("FTP", ftp, "W"),
+                row(
+                    "Intensity Factor", round(intensity / 100, 2) if intensity else None
+                ),
+                row(
+                    "Variability Index", round(variability, 2) if variability else None
+                ),
+            ],
+        ):
+            lines.append(r)
 
     # Obciążenie treningowe
     lines += ["", "## Obciążenie treningowe", ""]
-    for r in filter(None, [
-        row("Training Load", round(training_load, 1) if training_load else None),
-        row("TRIMP", round(trimp, 1) if trimp else None),
-        row("HR Load", round(hr_load, 1) if hr_load else None),
-        row("Suffer Score", int(suffer) if suffer else None),
-        row("Intensywność sesji", f"{round(intensity, 1)}%" if intensity else None),
-        row("Efficiency Factor", round(ef, 2) if ef else None),
-        row("Decoupling", f"{round(decoupling, 1)}%" if decoupling else None),
-        row("Polarization Index", round(polarization, 2) if polarization else None),
-        row("CTL (forma)", round(ctl, 1) if ctl else None),
-        row("ATL (zmęczenie)", round(atl, 1) if atl else None),
-        row("TSB (świeżość)", round(ctl - atl, 1) if ctl and atl else None),
-    ]): lines.append(r)
+    for r in filter(
+        None,
+        [
+            row("Training Load", round(training_load, 1) if training_load else None),
+            row("TRIMP", round(trimp, 1) if trimp else None),
+            row("HR Load", round(hr_load, 1) if hr_load else None),
+            row("Suffer Score", int(suffer) if suffer else None),
+            row("Intensywność sesji", f"{round(intensity, 1)}%" if intensity else None),
+            row("Efficiency Factor", round(ef, 2) if ef else None),
+            row("Decoupling", f"{round(decoupling, 1)}%" if decoupling else None),
+            row("Polarization Index", round(polarization, 2) if polarization else None),
+            row("CTL (forma)", round(ctl, 1) if ctl else None),
+            row("ATL (zmęczenie)", round(atl, 1) if atl else None),
+            row("TSB (świeżość)", round(ctl - atl, 1) if ctl and atl else None),
+        ],
+    ):
+        lines.append(r)
 
     # Odczucia
     if rpe or feel:
         lines += ["", "## Odczucia", ""]
-        for r in filter(None, [
-            row("RPE", rpe),
-            row("Feel", feel),
-        ]): lines.append(r)
+        for r in filter(
+            None,
+            [
+                row("RPE", rpe),
+                row("Feel", feel),
+            ],
+        ):
+            lines.append(r)
 
     # Warunki
     if temp_avg is not None:
         lines += ["", "## Warunki", ""]
-        for r in filter(None, [
-            row("Temperatura avg", f"{round(temp_avg, 1)}", "°C"),
-            row("Temperatura min/max", f"{temp_min}/{temp_max}" if temp_min is not None else None, "°C"),
-            row("Altitude avg", f"{round(alt_avg, 0):.0f}" if alt_avg else None, "m"),
-            row("Altitude min/max", f"{alt_min:.0f}/{alt_max:.0f}" if alt_min is not None else None, "m"),
-        ]): lines.append(r)
+        for r in filter(
+            None,
+            [
+                row("Temperatura avg", f"{round(temp_avg, 1)}", "°C"),
+                row(
+                    "Temperatura min/max",
+                    f"{temp_min}/{temp_max}" if temp_min is not None else None,
+                    "°C",
+                ),
+                row(
+                    "Altitude avg", f"{round(alt_avg, 0):.0f}" if alt_avg else None, "m"
+                ),
+                row(
+                    "Altitude min/max",
+                    f"{alt_min:.0f}/{alt_max:.0f}" if alt_min is not None else None,
+                    "m",
+                ),
+            ],
+        ):
+            lines.append(r)
 
     # Inne
     lines += ["", "## Inne", ""]
-    for r in filter(None, [
-        row("Kadencja", int(cadence) if cadence else None),
-        row("Kalorie", int(calories) if calories else None, "kcal"),
-        row("Waga", weight, "kg"),
-        row("Urządzenie", device),
-        row("Źródło", source),
-    ]): lines.append(r)
+    for r in filter(
+        None,
+        [
+            row("Kadencja", int(cadence) if cadence else None),
+            row("Kalorie", int(calories) if calories else None, "kcal"),
+            row("Waga", weight, "kg"),
+            row("Urządzenie", device),
+            row("Źródło", source),
+        ],
+    ):
+        lines.append(r)
     if strava_id:
-        lines.append(f"- **Strava:** [link](https://www.strava.com/activities/{strava_id})  ")
+        lines.append(
+            f"- **Strava:** [link](https://www.strava.com/activities/{strava_id})  "
+        )
 
     # Pogoda (z Open-Meteo, jeśli intervals.icu nie ma własnej)
     if weather:
         lines += ["", "## Pogoda (Open-Meteo)", ""]
-        for r in filter(None, [
-            row("Temperatura", f"{round(weather['temp'], 1)}" if weather.get("temp") is not None else None, "°C"),
-            row("Wiatr", f"{round(weather['wind_speed'], 1)} km/h od {int(weather['wind_dir'])}°" if weather.get("wind_speed") is not None else None),
-            row("Porywy", f"{round(weather['wind_gust'], 1)}" if weather.get("wind_gust") is not None else None, "km/h"),
-        ]): lines.append(r)
+        for r in filter(
+            None,
+            [
+                row(
+                    "Temperatura",
+                    f"{round(weather['temp'], 1)}"
+                    if weather.get("temp") is not None
+                    else None,
+                    "°C",
+                ),
+                row(
+                    "Wiatr",
+                    f"{round(weather['wind_speed'], 1)} km/h od {int(weather['wind_dir'])}°"
+                    if weather.get("wind_speed") is not None
+                    else None,
+                ),
+                row(
+                    "Porywy",
+                    f"{round(weather['wind_gust'], 1)}"
+                    if weather.get("wind_gust") is not None
+                    else None,
+                    "km/h",
+                ),
+            ],
+        ):
+            lines.append(r)
 
     # Splity szczegółowe (WORK/RECOVERY z /intervals endpoint, z wiatrem per split)
     lines += splits_table(intervals_data, atype, streams, weather)
@@ -492,30 +701,33 @@ def activity_note(a, intervals_data=None, streams=None, weather=None):
 
     return "\n".join(lines)
 
+
 def week_summary(activities, year, week_num):
     week_acts = []
     for a in activities:
-        d = a.get("start_date_local","")[:10]
-        if not d: continue
+        d = a.get("start_date_local", "")[:10]
+        if not d:
+            continue
         dt = datetime.strptime(d, "%Y-%m-%d")
         iso = dt.isocalendar()
         if iso[0] == year and iso[1] == week_num:
             week_acts.append(a)
-    if not week_acts: return None
+    if not week_acts:
+        return None
 
     jan4 = date(year, 1, 4)
-    week_start = jan4 + timedelta(weeks=week_num-1, days=-jan4.weekday())
+    week_start = jan4 + timedelta(weeks=week_num - 1, days=-jan4.weekday())
     week_end = week_start + timedelta(days=6)
 
-    total_dist = sum((a.get("distance",0) or 0) for a in week_acts) / 1000
-    total_time = sum((a.get("moving_time",0) or 0) for a in week_acts)
-    total_elev = sum(int(a.get("total_elevation_gain",0) or 0) for a in week_acts)
-    total_load = sum((a.get("icu_training_load",0) or 0) for a in week_acts)
-    total_trimp = sum((a.get("trimp",0) or 0) for a in week_acts)
-    total_cal = sum((a.get("calories",0) or 0) for a in week_acts)
+    total_dist = sum((a.get("distance", 0) or 0) for a in week_acts) / 1000
+    total_time = sum((a.get("moving_time", 0) or 0) for a in week_acts)
+    total_elev = sum(int(a.get("total_elevation_gain", 0) or 0) for a in week_acts)
+    total_load = sum((a.get("icu_training_load", 0) or 0) for a in week_acts)
+    total_trimp = sum((a.get("trimp", 0) or 0) for a in week_acts)
+    total_cal = sum((a.get("calories", 0) or 0) for a in week_acts)
 
     # CTL/ATL z ostatniej aktywności tygodnia
-    sorted_acts = sorted(week_acts, key=lambda x: x.get("start_date_local",""))
+    sorted_acts = sorted(week_acts, key=lambda x: x.get("start_date_local", ""))
     last = sorted_acts[-1]
     ctl = last.get("icu_ctl")
     atl = last.get("icu_atl")
@@ -523,53 +735,68 @@ def week_summary(activities, year, week_num):
 
     by_type = {}
     for a in week_acts:
-        t = a.get("type","Unknown")
-        by_type.setdefault(t, {"count":0,"dist":0,"time":0,"elev":0})
+        t = a.get("type", "Unknown")
+        by_type.setdefault(t, {"count": 0, "dist": 0, "time": 0, "elev": 0})
         by_type[t]["count"] += 1
-        by_type[t]["dist"] += (a.get("distance",0) or 0) / 1000
-        by_type[t]["time"] += (a.get("moving_time",0) or 0)
-        by_type[t]["elev"] += int(a.get("total_elevation_gain",0) or 0)
+        by_type[t]["dist"] += (a.get("distance", 0) or 0) / 1000
+        by_type[t]["time"] += a.get("moving_time", 0) or 0
+        by_type[t]["elev"] += int(a.get("total_elevation_gain", 0) or 0)
 
     lines = [
-        "---", "type: note", "status: active",
-        "tags: [sport, weekly-summary]", "area: life",
-        f"week: {year}-W{week_num:02d}", "---", "",
+        "---",
+        "type: note",
+        "status: active",
+        "tags: [sport, weekly-summary]",
+        "area: life",
+        f"week: {year}-W{week_num:02d}",
+        "---",
+        "",
         f"# 📊 Tygodniowe podsumowanie sportu — {year}-W{week_num:02d}",
         f"**Okres:** {week_start.strftime('%d.%m')} – {week_end.strftime('%d.%m.%Y')}",
-        "", "## Łącznie", "",
+        "",
+        "## Łącznie",
+        "",
         f"- **Aktywności:** {len(week_acts)}",
         f"- **Dystans:** {round(total_dist, 1)} km",
         f"- **Czas:** {hms(total_time)}",
         f"- **Przewyższenie:** {total_elev} m D+",
     ]
-    if total_load: lines.append(f"- **Training Load:** {round(total_load, 1)}")
-    if total_trimp: lines.append(f"- **TRIMP:** {round(total_trimp, 1)}")
-    if total_cal: lines.append(f"- **Kalorie:** {int(total_cal)} kcal")
-    if ctl: lines.append(f"- **CTL (forma):** {round(ctl, 1)}")
-    if atl: lines.append(f"- **ATL (zmęczenie):** {round(atl, 1)}")
+    if total_load:
+        lines.append(f"- **Training Load:** {round(total_load, 1)}")
+    if total_trimp:
+        lines.append(f"- **TRIMP:** {round(total_trimp, 1)}")
+    if total_cal:
+        lines.append(f"- **Kalorie:** {int(total_cal)} kcal")
+    if ctl:
+        lines.append(f"- **CTL (forma):** {round(ctl, 1)}")
+    if atl:
+        lines.append(f"- **ATL (zmęczenie):** {round(atl, 1)}")
     if tsb is not None:
-        tsb_label = "świeży 💪" if tsb > 5 else ("zmęczony 😴" if tsb < -10 else "neutralny")
+        tsb_label = (
+            "świeży 💪" if tsb > 5 else ("zmęczony 😴" if tsb < -10 else "neutralny")
+        )
         lines.append(f"- **TSB (świeżość):** {tsb} ({tsb_label})")
 
     lines += ["", "## Według typu", ""]
     for t, stats in sorted(by_type.items()):
         lines.append(
             f"- {emoji(t)} **{t}** — {stats['count']}x, "
-            f"{round(stats['dist'],1)} km, {hms(stats['time'])}, {stats['elev']} m D+"
+            f"{round(stats['dist'], 1)} km, {hms(stats['time'])}, {stats['elev']} m D+"
         )
 
     lines += ["", "## Aktywności", ""]
     for a in sorted_acts:
-        em = emoji(a.get("type",""))
-        name = a.get("name","Aktywność")
-        d = a.get("start_date_local","")[:10]
-        dist = round((a.get("distance",0) or 0)/1000, 1)
+        em = emoji(a.get("type", ""))
+        name = a.get("name", "Aktywność")
+        d = a.get("start_date_local", "")[:10]
+        dist = round((a.get("distance", 0) or 0) / 1000, 1)
         load = a.get("icu_training_load")
-        load_str = f" | Load: {round(load,1)}" if load else ""
+        load_str = f" | Load: {round(load, 1)}" if load else ""
         sn = safe_name(name)
         lines.append(f"- {em} [[{d} {sn}]] — {dist} km{load_str}")
 
     return "\n".join(lines)
+
 
 def sync(force=False):
     oldest = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
@@ -581,15 +808,17 @@ def sync(force=False):
     new_count = 0
     weeks_to_update = set()
     # Dysk = źródło prawdy. ID notatki czytamy z frontmattera (activity_id).
-    id_to_path = scan_existing_notes()                       # {act_id: relpath}
-    claimed = {rp: aid for aid, rp in id_to_path.items()}    # {relpath: act_id}
+    id_to_path = scan_existing_notes()  # {act_id: relpath}
+    claimed = {rp: aid for aid, rp in id_to_path.items()}  # {relpath: act_id}
 
     for a in activities:
-        act_id = str(a.get("id",""))
-        if not act_id: continue
-        if a.get("type") == "Walk": continue
-        start = a.get("start_date_local","")[:10]
-        name = a.get("name","Aktywnosc")
+        act_id = str(a.get("id", ""))
+        if not act_id:
+            continue
+        if a.get("type") == "Walk":
+            continue
+        start = a.get("start_date_local", "")[:10]
+        name = a.get("name", "Aktywnosc")
         # treningi w podfolderach YYYY/MM (write_text_safe tworzy katalogi)
         subdir = f"{start[:4]}/{start[5:7]}" if len(start) >= 7 else ""
         prefix = f"{subdir}/" if subdir else ""
@@ -598,7 +827,9 @@ def sync(force=False):
         # żeby jej nie nadpisać (np. 2× „Gdansk Road Cycling" tego samego dnia).
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
-            relpath = f"{prefix}{start} {safe_name(name)}__{a.get('strava_id') or act_id}.md"
+            relpath = (
+                f"{prefix}{start} {safe_name(name)}__{a.get('strava_id') or act_id}.md"
+            )
         filepath = f"{ACTIVITIES_DIR}/{relpath}"
 
         # Notatka z tym ID już jest pod tą samą ścieżką → pomiń (chyba że --force).
@@ -618,7 +849,12 @@ def sync(force=False):
 
         intervals_data = fetch_intervals(act_id)
         weather = None
-        if a.get("start_date_local") and a.get("type") not in ("WeightTraining", "Workout", "VirtualRide", "Swim"):
+        if a.get("start_date_local") and a.get("type") not in (
+            "WeightTraining",
+            "Workout",
+            "VirtualRide",
+            "Swim",
+        ):
             weather = fetch_weather(DEFAULT_LAT, DEFAULT_LON, a["start_date_local"])
         note = activity_note(a, intervals_data, None, weather)
         if not write_text_safe(filepath, note):
@@ -632,7 +868,8 @@ def sync(force=False):
                 try:
                     os.remove(old_path)
                     print(f"  🗑  usunięto starą nazwę: {old_rel}")
-                except OSError: pass
+                except OSError:
+                    pass
             claimed.pop(old_rel, None)
         id_to_path[act_id] = relpath
         claimed[relpath] = act_id
@@ -651,7 +888,10 @@ def sync(force=False):
                 print(f"  📊 {year}-W{week_num:02d}-sport.md zaktualizowany")
 
     save_state({"last_sync": datetime.now().isoformat()})
-    print(f"\nGotowe: {new_count} zaktualizowanych aktywności, {len(weeks_to_update)} tygodni")
+    print(
+        f"\nGotowe: {new_count} zaktualizowanych aktywności, {len(weeks_to_update)} tygodni"
+    )
+
 
 if __name__ == "__main__":
     try:
