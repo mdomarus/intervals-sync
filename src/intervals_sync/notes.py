@@ -14,7 +14,8 @@ from .formatters import (
     sanitize_filename,
     splits_table,
 )
-from .state import Activity
+from .load_metrics import load_section_lines
+from .state import Activity, WellnessSeries
 
 
 def activity_note(
@@ -337,7 +338,12 @@ def activity_note(
     return "\n".join(lines)
 
 
-def week_summary(activities: list[Activity], year: int, week_num: int) -> str | None:
+def week_summary(
+    activities: list[Activity],
+    year: int,
+    week_num: int,
+    wellness_series: WellnessSeries | None = None,
+) -> str | None:
     week_acts = []
     for activity in activities:
         date_str = activity.get("start_date_local", "")[:10]
@@ -416,6 +422,8 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
     if tsb is not None:
         tsb_label = "fresh 💪" if tsb > 5 else ("tired 😴" if tsb < -10 else "neutral")
         lines.append(f"- **TSB (freshness):** {tsb} ({tsb_label})")
+
+    lines += load_section_lines(wellness_series, year, week_num)
 
     lines += ["", "## By type", ""]
     for activity_type, stats in sorted(by_type.items()):

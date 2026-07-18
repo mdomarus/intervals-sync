@@ -3,7 +3,7 @@
 Syncs [intervals.icu](https://intervals.icu) activities to Obsidian markdown notes.
 
 - Activity notes → `YYYY/MM/YYYY-MM-DD <name>.md` under `activities_dir`
-- Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`
+- Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`, optionally including a deterministic **Load & trend** section (ACWR, ramp rate, week-over-week load, Foster monotony/strain, trailing trend table)
 - No third-party runtime dependencies — stdlib only
 - Requires Python 3.10+
 
@@ -63,6 +63,24 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 **Atomic writes** — notes are written to a `.tmp` file and swapped via `os.replace()` to avoid iCloud File Provider locks.
 
+## Weekly load & trend metrics
+
+When wellness data provides usable values, the weekly summary includes a `## Load & trend` section computed deterministically from intervals.icu wellness data — no AI or LLM involved, purely arithmetic.
+
+**Metrics explained:**
+
+- **ACWR** (Acute:Chronic Workload Ratio) — ATL divided by CTL, the exponentially-weighted variant of the ratio. A value of 0.8–1.3 is the "sweet spot": enough stimulus to adapt without a large injury-risk spike. Above 1.5 is high risk; below 0.8 is underloading.
+- **Ramp rate** (ΔCTL/week) — the week-over-week change in CTL (chronic training load, the Banister fitness score). A rise of up to ~5 pts/week is considered safe; 5–8 is aggressive but manageable; above 8 carries elevated injury risk. This is a coaching heuristic, not a hard clinical limit.
+- **Week-over-week load %** — how much total weekly load changed relative to the prior week. Rises above +30% or drops below −30% are flagged as large swings — another coaching heuristic to avoid sudden spikes.
+- **Monotony / Strain** — Foster training monotony is the weekly mean daily load divided by the standard deviation of daily load across the week. Low values mean varied training stimulus; above ~2.0 is considered elevated risk. Strain is weekly total load × monotony.
+- **Trend table** — a six-week trailing table showing Week, CTL, weekly Load, and Ramp (ΔCTL), so you can see how load and fitness have evolved week by week. The current in-progress week is flagged with `*`.
+
+**Sources:**
+
+- Gabbett TJ. "The training—injury prevention paradox: should athletes be training smarter and harder?" *Br J Sports Med* 2016;50(5):273–280. doi:[10.1136/bjsports-2015-095788](https://doi.org/10.1136/bjsports-2015-095788) — ACWR sweet-spot and risk bands.
+- Foster C. "Monitoring training in athletes with reference to overtraining syndrome." *Med Sci Sports Exerc* 1998;30(7):1164–1168. — Training monotony and strain.
+- Ramp-rate (5–8 pts/week) and week-over-week load (±30%) bands are **coaching heuristics** from TrainingPeaks / Coggan & Allen's Performance Manager Chart and intervals.icu Fitness/Form documentation (https://intervals.icu), not single controlled studies.
+
 ## Project structure
 
 ```
@@ -84,7 +102,7 @@ uv run ruff check    # linting
 uv run ruff format   # formatting
 ```
 
-Pre-commit hooks run format, lint, type check, and tests automatically on `git commit`. CI runs the same checks on Python 3.10 and 3.13 for every push and pull request.
+Pre-commit hooks run format, lint, type check, and tests automatically on `git commit`. CI runs the same checks on Python 3.10 and 3.14 for every push and pull request.
 
 ## License
 

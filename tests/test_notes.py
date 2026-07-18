@@ -1,7 +1,7 @@
 from typing import Any, cast
 
-from intervals_sync.notes import activity_note
-from intervals_sync.state import Activity
+from intervals_sync.notes import activity_note, week_summary
+from intervals_sync.state import Activity, WellnessSeries
 
 
 def _minimal_activity(**overrides: Any) -> Activity:
@@ -13,6 +13,43 @@ def _minimal_activity(**overrides: Any) -> Activity:
     }
     data.update(overrides)
     return cast(Activity, data)
+
+
+def _week_activity(**overrides: Any) -> Activity:
+    base: dict[str, Any] = {
+        "id": 1,
+        "type": "Run",
+        "name": "W29 Run",
+        "start_date_local": "2026-07-15T08:00:00",
+        "distance": 10000,
+        "moving_time": 3000,
+        "icu_training_load": 60,
+    }
+    base.update(overrides)
+    return cast(Activity, base)
+
+
+class TestWeekSummaryLoadSection:
+    def test_no_load_section_without_wellness(self) -> None:
+        activities = [_week_activity()]
+        summary = week_summary(activities, 2026, 29)
+        summary_explicit_none = week_summary(activities, 2026, 29, None)
+        assert summary is not None
+        assert "## Load & trend" not in summary
+        # Backward-compat: omitting the arg is byte-identical to passing None,
+        # and neither introduces the section or trailing artifacts.
+        assert summary == summary_explicit_none
+
+    def test_load_section_present_with_wellness(self) -> None:
+        series: WellnessSeries = [
+            {"id": "2026-07-12", "ctl": 36.0, "atl": 32.0, "atlLoad": 358.0},
+            {"id": "2026-07-15", "ctl": 37.0, "atl": 45.0, "atlLoad": 60.0},
+            {"id": "2026-07-19", "ctl": 38.0, "atl": 42.0, "atlLoad": 100.0},
+        ]
+        summary = week_summary([_week_activity()], 2026, 29, series)
+        assert summary is not None
+        assert "## Load & trend" in summary
+        assert summary.index("## Load & trend") < summary.index("## By type")
 
 
 class TestActivityNoteTags:
