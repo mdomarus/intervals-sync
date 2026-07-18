@@ -54,6 +54,9 @@ LOAD_WOW_DELOAD_PCT = -30.0
 MONOTONY_GOOD_MAX = 1.5
 MONOTONY_MODERATE_MAX = 2.0
 
+# How many trailing ISO weeks the weekly-summary trend table shows.
+TREND_WEEKS = 6
+
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
     "athlete_id": "INTERVALS_ATHLETE_ID",

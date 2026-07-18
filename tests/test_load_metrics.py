@@ -11,6 +11,7 @@ from intervals_sync.load_metrics import (
     monotony_label,
     ramp_rate,
     ramp_rate_label,
+    trend_rows,
     week_over_week_label,
     week_over_week_load,
 )
@@ -137,3 +138,31 @@ class TestMonotonyAndStrain:
         assert "high" in monotony_label(2.5)
         assert "moderate" in monotony_label(1.7)
         assert "good" in monotony_label(1.0)
+
+
+class TestTrendRows:
+    def test_builds_rows_for_weeks_with_data(self) -> None:
+        series = _series(
+            ("2026-07-05", 34.0, 30.0, 300.0),  # Sunday W27
+            ("2026-07-12", 36.0, 32.0, 358.0),  # Sunday W28
+            ("2026-07-19", 38.0, 30.0, 421.0),  # Sunday W29
+        )
+        rows = trend_rows(series, 2026, 29)
+        assert [row["week"] for row in rows] == ["2026-W27", "2026-W28", "2026-W29"]
+        assert rows[-1]["ctl"] == 38.0
+        assert rows[-1]["ramp"] == 2.0  # 38.0 - 36.0
+
+    def test_partial_flag_when_sunday_beyond_last_series_day(self) -> None:
+        series = _series(
+            ("2026-07-12", 36.0, 32.0, 358.0),  # Sunday W28 (complete)
+            ("2026-07-15", 37.0, 33.0, 60.0),  # Wednesday W29 (week still in progress)
+        )
+        rows = trend_rows(series, 2026, 29)
+        assert rows[-1]["week"] == "2026-W29"
+        assert rows[-1]["partial"] is True
+        assert rows[-2]["partial"] is False
+
+    def test_skips_weeks_without_data(self) -> None:
+        series = _series(("2026-07-19", 38.0, 30.0, 421.0))  # only W29
+        rows = trend_rows(series, 2026, 29)
+        assert [row["week"] for row in rows] == ["2026-W29"]
