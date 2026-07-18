@@ -11,6 +11,7 @@ from .formatters import (
     hr_zones_summary,
     iso_year_week,
     mps_to_kmh,
+    pace_zones_summary,
     sanitize_filename,
     splits_table,
 )
@@ -106,6 +107,18 @@ def activity_note(
     max_speed_str = mps_to_kmh(get_field(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
 
+    pace_zone_times = (
+        get_field(activity, "pace_zone_times") if activity_type in RUN_TYPES else None
+    )
+    gap_zone_times = (
+        get_field(activity, "gap_zone_times") if activity_type in RUN_TYPES else None
+    )
+    pace_zone_limits = (
+        get_field(activity, "pace_zones") if activity_type in RUN_TYPES else None
+    )
+    pace_zones_str = pace_zones_summary(pace_zone_times, pace_zone_limits)
+    gap_zones_str = pace_zones_summary(gap_zone_times, pace_zone_limits)
+
     lines = [
         "---",
         "type: note",
@@ -180,6 +193,13 @@ def activity_note(
         )
         if zones_str:
             lines.append(f"- **HR Zones:** {zones_str}  ")
+
+    if pace_zones_str or gap_zones_str:
+        lines += ["", "## Pace Zones", ""]
+        if pace_zones_str:
+            lines.append(f"- **Pace Zones:** {pace_zones_str}  ")
+        if gap_zones_str:
+            lines.append(f"- **GAP Zones:** {gap_zones_str}  ")
 
     if power_avg or power_weighted:
         lines += ["", "## Power", ""]
