@@ -9,8 +9,8 @@ import glob
 import re
 from typing import Any, Mapping, cast
 from datetime import datetime, timedelta, date
-from weather import fetch_weather
-from state import load_state, save_state, State, Activity
+from .weather import fetch_weather
+from .state import load_state, save_state, State, Activity
 
 
 def _load_secrets() -> tuple[str, str, str, str]:
