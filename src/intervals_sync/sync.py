@@ -9,7 +9,7 @@ from typing import cast
 
 from .api import fetch_intervals, get_activity, set_elevation_correction, api_get
 from .config import ACTIVITIES_DIR, DEFAULT_LAT, DEFAULT_LON, WEEKLY_DIR
-from .formatters import safe_name
+from .formatters import sanitize_filename
 from .notes import activity_note, week_summary
 from .state import Activity, State, load_state, save_state
 from .weather import fetch_weather
@@ -101,12 +101,12 @@ def sync(force: bool = False) -> None:
         # activities go into YYYY/MM subdirs (write_text_safe creates dirs)
         subdir = f"{start[:4]}/{start[5:7]}" if len(start) >= 7 else ""
         prefix = f"{subdir}/" if subdir else ""
-        relpath = f"{prefix}{start} {safe_name(name)}.md"
+        relpath = f"{prefix}{start} {sanitize_filename(name)}.md"
         # Collision: a different activity (different ID) already claimed this name →
         # append ID to avoid overwriting (e.g. 2× "Gdansk Road Cycling" same day).
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
-            relpath = f"{prefix}{start} {safe_name(name)}__{activity.get('strava_id') or act_id}.md"
+            relpath = f"{prefix}{start} {sanitize_filename(name)}__{activity.get('strava_id') or act_id}.md"
         filepath = f"{ACTIVITIES_DIR}/{relpath}"
 
         # Note with this ID already exists at this path → skip (unless --force).

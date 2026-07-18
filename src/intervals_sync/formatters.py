@@ -2,7 +2,7 @@ import unicodedata
 from typing import Any, Mapping
 
 
-def hms(total_seconds: int | float | None) -> str:
+def format_duration(total_seconds: int | float | None) -> str:
     if not total_seconds:
         return "—"
     total_seconds = int(total_seconds)
@@ -11,7 +11,7 @@ def hms(total_seconds: int | float | None) -> str:
     return f"{hours}:{minutes:02d}:{seconds:02d}"
 
 
-def pace(dist_m: float | None, time_s: float | None) -> str | None:
+def format_pace(dist_m: float | None, time_s: float | None) -> str | None:
     if not dist_m or not time_s:
         return None
     pace_secs_per_km = time_s / (dist_m / 1000)
@@ -19,13 +19,13 @@ def pace(dist_m: float | None, time_s: float | None) -> str | None:
     return f"{minutes}:{seconds:02d} /km"
 
 
-def speed_kmh(mps: float | None) -> float | None:
+def mps_to_kmh(mps: float | None) -> float | None:
     if not mps:
         return None
     return round(mps * 3.6, 1)
 
 
-def emoji(activity_type: str) -> str:
+def activity_emoji(activity_type: str) -> str:
     return {
         "Run": "🏃",
         "TrailRun": "🏔️",
@@ -42,7 +42,7 @@ def emoji(activity_type: str) -> str:
     }.get(activity_type, "🏅")
 
 
-def safe_name(text: str) -> str:
+def sanitize_filename(text: str) -> str:
     def keep(c: str) -> bool:
         if c.isalnum() or c in " -_":
             return True
@@ -52,12 +52,12 @@ def safe_name(text: str) -> str:
     return "".join(c if keep(c) else "_" for c in text)
 
 
-def val(activity: Mapping[str, Any], key: str, default: Any = None) -> Any:
+def get_field(activity: Mapping[str, Any], key: str, default: Any = None) -> Any:
     value = activity.get(key)
     return default if value is None else value
 
 
-def row(label: str, value: Any, unit: str = "") -> str | None:
+def format_markdown_row(label: str, value: Any, unit: str = "") -> str | None:
     if value is None or value == "" or value == "—":
         return None
     return f"- **{label}:** {value}{(' ' + unit) if unit else ''}  "
@@ -124,14 +124,14 @@ def splits_table(
             f"{int(interval['intensity'])}%" if interval.get("intensity") else "—"
         )
         dist_str = f"{dist / 1000:.2f} km" if dist else "—"
-        time_str = hms(moving_time) if moving_time else "—"
+        time_str = format_duration(moving_time) if moving_time else "—"
         if is_run:
-            pace_str = pace(dist, moving_time) or "—"
+            pace_str = format_pace(dist, moving_time) or "—"
             gap_mps = interval.get("gap")
-            gap_str = pace(1000, 1000 / gap_mps) if gap_mps else "—"
+            gap_str = format_pace(1000, 1000 / gap_mps) if gap_mps else "—"
             table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {pace_str} | {gap_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
         else:
-            speed = speed_kmh(interval.get("average_speed"))
+            speed = mps_to_kmh(interval.get("average_speed"))
             speed_str = f"{speed} km/h" if speed else "—"
             table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {speed_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
         lines.append(table_row)
