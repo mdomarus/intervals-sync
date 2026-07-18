@@ -63,11 +63,11 @@ def activity_note(
     trimp = get_field(activity, "trimp")
     hr_load = get_field(activity, "hr_load")
     suffer = get_field(activity, "suffer_score")
-    rpe = (
-        get_field(activity, "icu_rpe")
-        or get_field(activity, "session_rpe")
-        or get_field(activity, "perceived_exertion")
-    )
+    rpe = get_field(activity, "icu_rpe")
+    if rpe is None:
+        rpe = get_field(activity, "session_rpe")
+    if rpe is None:
+        rpe = get_field(activity, "perceived_exertion")
     feel = get_field(activity, "feel")
 
     temp_avg = get_field(activity, "average_temp")
@@ -223,13 +223,16 @@ def activity_note(
                 format_markdown_row("CTL (fitness)", round(ctl, 1) if ctl else None),
                 format_markdown_row("ATL (fatigue)", round(atl, 1) if atl else None),
                 format_markdown_row(
-                    "TSB (freshness)", round(ctl - atl, 1) if ctl and atl else None
+                    "TSB (freshness)",
+                    round(ctl - atl, 1)
+                    if ctl is not None and atl is not None
+                    else None,
                 ),
             ],
         )
     )
 
-    if rpe or feel:
+    if rpe is not None or feel is not None:
         lines += ["", "## Feel", ""]
         lines.extend(
             filter(
@@ -252,12 +255,14 @@ def activity_note(
                     ),
                     format_markdown_row(
                         "Altitude avg",
-                        f"{round(alt_avg, 0):.0f}" if alt_avg else None,
+                        f"{round(alt_avg, 0):.0f}" if alt_avg is not None else None,
                         "m",
                     ),
                     format_markdown_row(
                         "Altitude min/max",
-                        f"{alt_min:.0f}/{alt_max:.0f}" if alt_min is not None else None,
+                        f"{alt_min:.0f}/{alt_max:.0f}"
+                        if alt_min is not None and alt_max is not None
+                        else None,
                         "m",
                     ),
                 ],
@@ -355,7 +360,7 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
     last = sorted_acts[-1]
     ctl = last.get("icu_ctl")
     atl = last.get("icu_atl")
-    tsb = round(ctl - atl, 1) if ctl and atl else None
+    tsb = round(ctl - atl, 1) if ctl is not None and atl is not None else None
 
     by_type: dict[str, dict[str, Any]] = {}
     for activity in week_acts:
@@ -393,9 +398,9 @@ def week_summary(activities: list[Activity], year: int, week_num: int) -> str | 
         lines.append(f"- **TRIMP:** {round(total_trimp, 1)}")
     if total_cal:
         lines.append(f"- **Calories:** {int(total_cal)} kcal")
-    if ctl:
+    if ctl is not None:
         lines.append(f"- **CTL (fitness):** {round(ctl, 1)}")
-    if atl:
+    if atl is not None:
         lines.append(f"- **ATL (fatigue):** {round(atl, 1)}")
     if tsb is not None:
         tsb_label = "fresh 💪" if tsb > 5 else ("tired 😴" if tsb < -10 else "neutral")

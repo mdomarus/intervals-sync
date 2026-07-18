@@ -15,7 +15,8 @@ def fetch_weather(lat: float, lon: float, start_iso: str) -> dict[str, float] | 
             if "T" in start_iso
             else datetime.strptime(start_iso[:10], "%Y-%m-%d")
         )
-        days_back = max(1, (datetime.now() - start_dt).days + 1)
+        start_dt_naive = start_dt.replace(tzinfo=None)
+        days_back = max(1, (datetime.now() - start_dt_naive).days + 1)
         if days_back > WEATHER_MAX_PAST_DAYS:
             return None
         params = urllib.parse.urlencode(

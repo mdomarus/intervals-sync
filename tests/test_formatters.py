@@ -43,9 +43,12 @@ class TestMpsToKmh:
         assert mps_to_kmh(10) == 36.0
         assert mps_to_kmh(2.777) == 10.0
 
-    def test_none_and_zero_return_none(self) -> None:
+    def test_none_returns_none(self) -> None:
         assert mps_to_kmh(None) is None
-        assert mps_to_kmh(0) is None
+
+    def test_zero_converts_to_zero(self) -> None:
+        # 0.0 m/s is a valid reading; should convert to 0.0 km/h, not be treated as absent
+        assert mps_to_kmh(0) == 0.0
 
 
 class TestIsoYearWeek:

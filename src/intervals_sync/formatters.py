@@ -35,7 +35,7 @@ def format_pace(dist_m: float | None, time_s: float | None) -> str | None:
 
 
 def mps_to_kmh(mps: float | None) -> float | None:
-    if not mps:
+    if mps is None:
         return None
     return round(mps * 3.6, 1)
 

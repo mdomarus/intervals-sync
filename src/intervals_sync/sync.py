@@ -168,7 +168,9 @@ def sync(force: bool = False) -> None:
         print(f"  ✓ {relpath}")
 
     for year, week_num in weeks_to_update:
-        summary = week_summary(activities, year, week_num)
+        summary = week_summary(
+            [a for a in activities if a.get("type") != "Walk"], year, week_num
+        )
         if summary:
             weekly_note_path = f"{weekly_dir}/{year}-W{week_num:02d}-sport.md"
             if write_text_safe(weekly_note_path, summary):
