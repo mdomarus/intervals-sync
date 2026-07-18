@@ -96,6 +96,12 @@ def activity_note(
         tag_list += tags
 
     pace_str = format_pace(dist_m, moving) if activity_type in RUN_TYPES else None
+    gap_mps = get_field(activity, "gap") if activity_type in RUN_TYPES else None
+    gap_str = format_pace(1000, 1000 / gap_mps) if gap_mps else None
+    threshold_mps = (
+        get_field(activity, "threshold_pace") if activity_type in RUN_TYPES else None
+    )
+    threshold_str = format_pace(1000, 1000 / threshold_mps) if threshold_mps else None
     speed_str = mps_to_kmh(get_field(activity, "average_speed"))
     max_speed_str = mps_to_kmh(get_field(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
@@ -134,6 +140,8 @@ def activity_note(
                     format_duration(elapsed) if elapsed and elapsed != moving else None,
                 ),
                 format_markdown_row("Pace", pace_str),
+                format_markdown_row("GAP", gap_str),
+                format_markdown_row("Threshold", threshold_str),
                 format_markdown_row("Speed avg", speed_str, "km/h"),
                 format_markdown_row("Speed max", max_speed_str, "km/h"),
                 format_markdown_row(
