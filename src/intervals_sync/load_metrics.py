@@ -1,6 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 
-from .config import ACWR_ELEVATED_MAX, ACWR_OPTIMAL_MAX, ACWR_UNDERLOAD_MAX
+from .config import (
+    ACWR_ELEVATED_MAX,
+    ACWR_OPTIMAL_MAX,
+    ACWR_UNDERLOAD_MAX,
+    RAMP_AGGRESSIVE_MAX,
+    RAMP_SAFE_MAX,
+)
 from .state import WellnessDay, WellnessSeries
 
 
@@ -51,3 +57,26 @@ def acwr_label(value: float) -> str:
     if value <= ACWR_ELEVATED_MAX:
         return "🟠 elevated risk — above sweet-spot (0.8–1.3)"
     return "🔴 high injury risk"
+
+
+def ramp_rate(series: WellnessSeries, year: int, week_num: int) -> float | None:
+    """Week-over-week change in CTL. None if either week lacks a reference row."""
+    this_week_row = _week_reference_row(series, year, week_num)
+    previous_sunday = _week_sunday(year, week_num) - timedelta(days=7)
+    previous_iso = previous_sunday.isocalendar()
+    previous_week_row = _week_reference_row(series, previous_iso[0], previous_iso[1])
+    if this_week_row is None or previous_week_row is None:
+        return None
+    this_ctl = this_week_row.get("ctl") or 0.0
+    previous_ctl = previous_week_row.get("ctl") or 0.0
+    return round(this_ctl - previous_ctl, 1)
+
+
+def ramp_rate_label(value: float) -> str:
+    if value > RAMP_AGGRESSIVE_MAX:
+        return "🔴 very fast rise"
+    if value > RAMP_SAFE_MAX:
+        return "🟠 aggressive build"
+    if value >= 0:
+        return "🟢 safe build"
+    return "🔵 detraining / recovery"

@@ -6,6 +6,8 @@ from intervals_sync.load_metrics import (
     _week_sunday,
     acwr,
     acwr_label,
+    ramp_rate,
+    ramp_rate_label,
 )
 from intervals_sync.state import WellnessSeries
 
@@ -72,3 +74,22 @@ class TestAcwr:
         assert "optimal" in acwr_label(1.0)
         assert "elevated" in acwr_label(1.4)
         assert "high injury risk" in acwr_label(1.6)
+
+
+class TestRampRate:
+    def test_ramp_is_ctl_delta_week_over_week(self) -> None:
+        series = _series(
+            ("2026-07-12", 32.0, 30.0, 0.0),  # Sunday W28
+            ("2026-07-19", 38.2, 30.0, 0.0),  # Sunday W29
+        )
+        assert ramp_rate(series, 2026, 29) == 6.2
+
+    def test_ramp_none_without_previous_week(self) -> None:
+        series = _series(("2026-07-19", 38.2, 30.0, 0.0))
+        assert ramp_rate(series, 2026, 29) is None
+
+    def test_ramp_label_bands(self) -> None:
+        assert "very fast" in ramp_rate_label(9.0)
+        assert "aggressive" in ramp_rate_label(6.0)
+        assert "safe" in ramp_rate_label(3.0)
+        assert "detraining" in ramp_rate_label(-1.0)

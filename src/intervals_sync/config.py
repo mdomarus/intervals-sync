@@ -42,6 +42,10 @@ ACWR_UNDERLOAD_MAX = 0.8
 ACWR_OPTIMAL_MAX = 1.3
 ACWR_ELEVATED_MAX = 1.5
 
+# Ramp rate = week-over-week change in CTL (CTL points per week).
+RAMP_SAFE_MAX = 5.0
+RAMP_AGGRESSIVE_MAX = 8.0
+
 # Required settings and the environment variable each maps to (env fallback path).
 _ENV_BY_KEY = {
     "athlete_id": "INTERVALS_ATHLETE_ID",
