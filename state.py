@@ -6,6 +6,64 @@ from typing import TypedDict
 STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
 
 
+class Activity(TypedDict, total=False):
+    id: int
+    type: str
+    name: str
+    start_date_local: str
+    distance: float
+    moving_time: int
+    elapsed_time: int
+    total_elevation_gain: float
+    total_elevation_loss: float
+    average_altitude: float
+    min_altitude: float
+    max_altitude: float
+    average_heartrate: float
+    max_heartrate: float
+    icu_resting_hr: float
+    athlete_max_hr: float
+    lthr: float
+    icu_hr_zone_times: list[int]
+    icu_hr_zones: list[int]
+    average_cadence: float
+    icu_average_watts: float
+    icu_weighted_avg_watts: float
+    icu_ftp: float
+    icu_intensity: float
+    icu_variability_index: float
+    decoupling: float
+    icu_efficiency_factor: float
+    polarization_index: float
+    icu_ctl: float
+    icu_atl: float
+    icu_training_load: float
+    trimp: float
+    hr_load: float
+    suffer_score: float
+    icu_rpe: float
+    session_rpe: float
+    perceived_exertion: float
+    feel: int
+    average_temp: float
+    min_temp: float
+    max_temp: float
+    calories: float
+    icu_weight: float
+    device_name: str
+    source: str
+    strava_id: int
+    race: bool
+    description: str
+    tags: list[str]
+    icu_warmup_time: int
+    icu_cooldown_time: int
+    interval_summary: list
+    average_speed: float
+    max_speed: float
+    use_elevation_correction: bool
+
+
 class State(TypedDict):
     last_sync: str | None
 

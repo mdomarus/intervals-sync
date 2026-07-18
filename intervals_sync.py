@@ -7,10 +7,10 @@ import urllib.request
 import base64
 import glob
 import re
-from typing import Any
+from typing import Any, Mapping, cast
 from datetime import datetime, timedelta, date
 from weather import fetch_weather
-from state import load_state, save_state, State
+from state import load_state, save_state, State, Activity
 
 
 def _load_secrets() -> tuple[str, str, str, str]:
@@ -211,7 +211,7 @@ def scan_existing_notes() -> dict[str, str]:
     return out
 
 
-def val(a: dict, key: str, default=None):
+def val(a: Mapping, key: str, default=None):
     v = a.get(key)
     return default if v is None else v
 
@@ -297,7 +297,7 @@ def splits_table(intervals_data: dict | None, atype: str) -> list[str]:
 
 
 def activity_note(
-    a: dict, intervals_data: dict | None = None, weather: dict | None = None
+    a: Activity, intervals_data: dict | None = None, weather: dict | None = None
 ) -> str:
     atype = val(a, "type", "Unknown")
     act_id = val(a, "id", "")
@@ -569,7 +569,7 @@ def activity_note(
     return "\n".join(lines)
 
 
-def week_summary(activities: list, year: int, week_num: int) -> str | None:
+def week_summary(activities: list[Activity], year: int, week_num: int) -> str | None:
     week_acts = []
     for a in activities:
         d = a.get("start_date_local", "")[:10]
@@ -676,7 +676,9 @@ def sync(force: bool = False) -> None:
 
     newest: str = datetime.now().strftime("%Y-%m-%d")
     print(f"Pobieram aktywności {oldest} → {newest}...")
-    activities: list[dict] = api_get(f"activities?oldest={oldest}&newest={newest}")
+    activities = cast(
+        list[Activity], api_get(f"activities?oldest={oldest}&newest={newest}")
+    )
     print(f"Znaleziono {len(activities)} aktywności")
 
     new_count = 0
@@ -730,7 +732,7 @@ def sync(force: bool = False) -> None:
             "Swim",
         ):
             weather = fetch_weather(DEFAULT_LAT, DEFAULT_LON, a["start_date_local"])
-        note = activity_note(a, intervals_data, weather)
+        note = activity_note(cast(Activity, a), intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue
 
