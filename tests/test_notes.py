@@ -52,6 +52,34 @@ class TestWeekSummaryLoadSection:
         assert summary.index("## Load & trend") < summary.index("## By type")
 
 
+class TestActivityNoteGapAndThreshold:
+    def test_gap_row_present_for_run(self) -> None:
+        # gap = 3.5 m/s → 1000/3.5 ≈ 285.7s → 4:45 /km
+        note = activity_note(_minimal_activity(type="Run", gap=3.5))
+        assert "**GAP:**" in note
+
+    def test_gap_row_absent_without_gap(self) -> None:
+        note = activity_note(_minimal_activity(type="Run"))
+        assert "**GAP:**" not in note
+
+    def test_gap_row_absent_for_non_run(self) -> None:
+        note = activity_note(_minimal_activity(type="Ride", gap=3.5))
+        assert "**GAP:**" not in note
+
+    def test_threshold_row_present_for_run(self) -> None:
+        note = activity_note(_minimal_activity(type="Run", threshold_pace=3.8))
+        assert "**Threshold:**" in note
+
+    def test_threshold_row_absent_for_non_run(self) -> None:
+        note = activity_note(_minimal_activity(type="Ride", threshold_pace=3.8))
+        assert "**Threshold:**" not in note
+
+    def test_gap_value_formatted_as_pace(self) -> None:
+        # gap = 1000/305 m/s → format_pace(1000, 305) → "5:05 /km"
+        note = activity_note(_minimal_activity(type="Run", gap=1000 / 305))
+        assert "5:05 /km" in note
+
+
 class TestActivityNoteTags:
     def test_known_type_appears_in_tags(self) -> None:
         note = activity_note(_minimal_activity(type="Run"))
