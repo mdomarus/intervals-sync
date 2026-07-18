@@ -25,9 +25,16 @@ def _week_sunday(year: int, week_num: int) -> date:
 def _week_reference_row(
     series: WellnessSeries, year: int, week_num: int
 ) -> WellnessDay | None:
-    """Row for the week's Sunday, or the last row on/before it. None if none qualify."""
+    """Latest wellness row within the requested ISO week (Mon–Sun), or None.
+
+    Bounded to the week itself so a completely missing week never borrows a
+    stale earlier week's CTL/ATL (which would invent a trend row and turn a
+    multi-week CTL change into a spurious one-week ramp)."""
+    monday_iso = date.fromisocalendar(year, week_num, 1).isoformat()
     sunday_iso = _week_sunday(year, week_num).isoformat()
-    candidates = [row for row in series if row.get("id", "") <= sunday_iso]
+    candidates = [
+        row for row in series if monday_iso <= row.get("id", "") <= sunday_iso
+    ]
     if not candidates:
         return None
     return max(candidates, key=lambda row: row.get("id", ""))
@@ -151,12 +158,17 @@ def _last_series_day(series: WellnessSeries) -> str:
     return max((row.get("id", "") for row in series), default="")
 
 
+def _week_is_partial(series: WellnessSeries, year: int, week_num: int) -> bool:
+    """True when the week's Sunday is later than the last day present in the
+    series — i.e. a mid-week sync where later days haven't happened yet."""
+    return _week_sunday(year, week_num).isoformat() > _last_series_day(series)
+
+
 def trend_rows(series: WellnessSeries, year: int, week_num: int) -> list[TrendRow]:
     """Up to TREND_WEEKS trailing weekly rows ending at (year, week_num).
 
     Weeks with no wellness reference row are skipped. A week is 'partial' when
     its Sunday is later than the last day present in the series (mid-week sync)."""
-    last_day = _last_series_day(series)
     end_sunday = _week_sunday(year, week_num)
     rows: list[TrendRow] = []
     for weeks_back in range(TREND_WEEKS - 1, -1, -1):
@@ -171,7 +183,7 @@ def trend_rows(series: WellnessSeries, year: int, week_num: int) -> list[TrendRo
                 "ctl": round(reference_row.get("ctl") or 0.0, 1),
                 "load": round(sum(_week_daily_loads(series, iso_year, iso_week)), 0),
                 "ramp": ramp_rate(series, iso_year, iso_week),
-                "partial": week_sunday.isoformat() > last_day,
+                "partial": _week_is_partial(series, iso_year, iso_week),
             }
         )
     return rows
@@ -184,6 +196,7 @@ def _format_ramp(value: float) -> str:
 
 def _metric_bullets(series: WellnessSeries, year: int, week_num: int) -> list[str]:
     bullets: list[str] = []
+    is_partial = _week_is_partial(series, year, week_num)
     acwr_value = acwr(series, year, week_num)
     if acwr_value is not None:
         bullets.append(f"- **ACWR (ATL/CTL):** {acwr_value} {acwr_label(acwr_value)}")
@@ -195,16 +208,18 @@ def _metric_bullets(series: WellnessSeries, year: int, week_num: int) -> list[st
         )
     wow_value = week_over_week_load(series, year, week_num)
     if wow_value is not None:
+        partial_note = " (week in progress)" if is_partial else ""
         bullets.append(
             f"- **Week-over-week load:** {_format_ramp(int(wow_value))}% "
-            f"{week_over_week_label(wow_value)}"
+            f"{week_over_week_label(wow_value)}{partial_note}"
         )
     monotony_strain = monotony_and_strain(series, year, week_num)
     if monotony_strain is not None:
         monotony, strain = monotony_strain
+        partial_note = " (week in progress)" if is_partial else ""
         bullets.append(
             f"- **Monotony (Foster):** {monotony} {monotony_label(monotony)} · "
-            f"**Strain:** {int(strain)}"
+            f"**Strain:** {int(strain)}{partial_note}"
         )
     return bullets
 

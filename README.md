@@ -3,7 +3,7 @@
 Syncs [intervals.icu](https://intervals.icu) activities to Obsidian markdown notes.
 
 - Activity notes → `YYYY/MM/YYYY-MM-DD <name>.md` under `activities_dir`
-- Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`, including a deterministic **Load & trend** section (ACWR, ramp rate, week-over-week load, Foster monotony/strain, trailing trend table)
+- Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`, optionally including a deterministic **Load & trend** section (ACWR, ramp rate, week-over-week load, Foster monotony/strain, trailing trend table)
 - No third-party runtime dependencies — stdlib only
 - Requires Python 3.10+
 
@@ -65,7 +65,7 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 ## Weekly load & trend metrics
 
-Each weekly summary includes a `## Load & trend` section computed deterministically from intervals.icu wellness data — no AI or LLM involved, purely arithmetic.
+When wellness data provides usable values, the weekly summary includes a `## Load & trend` section computed deterministically from intervals.icu wellness data — no AI or LLM involved, purely arithmetic.
 
 **Metrics explained:**
 
@@ -73,7 +73,7 @@ Each weekly summary includes a `## Load & trend` section computed deterministica
 - **Ramp rate** (ΔCTL/week) — the week-over-week change in CTL (chronic training load, the Banister fitness score). A rise of up to ~5 pts/week is considered safe; 5–8 is aggressive but manageable; above 8 carries elevated injury risk. This is a coaching heuristic, not a hard clinical limit.
 - **Week-over-week load %** — how much total weekly load changed relative to the prior week. Rises above +30% or drops below −30% are flagged as large swings — another coaching heuristic to avoid sudden spikes.
 - **Monotony / Strain** — Foster training monotony is the weekly mean daily load divided by the standard deviation of daily load across the week. Low values mean varied training stimulus; above ~2.0 is considered elevated risk. Strain is weekly total load × monotony.
-- **Trend table** — a six-week trailing table showing ATL, CTL, TSB (form), ACWR, ramp, and monotony, so you can see how these values have evolved week by week.
+- **Trend table** — a six-week trailing table showing Week, CTL, weekly Load, and Ramp (ΔCTL), so you can see how load and fitness have evolved week by week. The current in-progress week is flagged with `*`.
 
 **Sources:**
 
