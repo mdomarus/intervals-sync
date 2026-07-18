@@ -29,7 +29,7 @@ def write_text_safe(
     parent_dir = os.path.dirname(path)
     os.makedirs(parent_dir, exist_ok=True)
     tmp = os.path.join(parent_dir, f".{os.path.basename(path)}.tmp.{os.getpid()}")
-    last = None
+    last_error: OSError | None = None
     for attempt in range(retries):
         try:
             with open(tmp, "w") as f:
@@ -37,7 +37,7 @@ def write_text_safe(
             os.replace(tmp, path)
             return True
         except OSError as e:
-            last = e
+            last_error = e
             try:
                 if os.path.exists(tmp):
                     os.remove(tmp)
@@ -45,7 +45,7 @@ def write_text_safe(
                 pass
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
-    print(f"  ⚠️  failed to save {os.path.basename(path)}: {last}")
+    print(f"  ⚠️  failed to save {os.path.basename(path)}: {last_error}")
     return False
 
 
@@ -55,7 +55,7 @@ def scan_existing_notes() -> dict[str, str]:
     Disk is the source of truth for rename detection and collision avoidance —
     the ID lives in the note itself (activity_id:), so we don't rely on an
     external state file that may drift or be unaware of pre-tracking notes."""
-    out = {}
+    existing_notes: dict[str, str] = {}
     for note_path in glob.glob(f"{ACTIVITIES_DIR}/**/*.md", recursive=True):
         try:
             with open(note_path) as f:
@@ -64,8 +64,8 @@ def scan_existing_notes() -> dict[str, str]:
             continue
         match = re.search(r"(?m)^activity_id:\s*(\S+)\s*$", head)
         if match:
-            out[match.group(1)] = os.path.relpath(note_path, ACTIVITIES_DIR)
-    return out
+            existing_notes[match.group(1)] = os.path.relpath(note_path, ACTIVITIES_DIR)
+    return existing_notes
 
 
 def sync(force: bool = False) -> None:
@@ -90,14 +90,14 @@ def sync(force: bool = False) -> None:
     id_to_path = scan_existing_notes()  # {act_id: relpath}
     claimed = {rp: aid for aid, rp in id_to_path.items()}  # {relpath: act_id}
 
-    for a in activities:
-        act_id = str(a.get("id", ""))
+    for activity in activities:
+        act_id = str(activity.get("id", ""))
         if not act_id:
             continue
-        if a.get("type") == "Walk":
+        if activity.get("type") == "Walk":
             continue
-        start = a.get("start_date_local", "")[:10]
-        name = a.get("name", "Activity")
+        start = activity.get("start_date_local", "")[:10]
+        name = activity.get("name", "Activity")
         # activities go into YYYY/MM subdirs (write_text_safe creates dirs)
         subdir = f"{start[:4]}/{start[5:7]}" if len(start) >= 7 else ""
         prefix = f"{subdir}/" if subdir else ""
@@ -106,9 +106,7 @@ def sync(force: bool = False) -> None:
         # append ID to avoid overwriting (e.g. 2× "Gdansk Road Cycling" same day).
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
-            relpath = (
-                f"{prefix}{start} {safe_name(name)}__{a.get('strava_id') or act_id}.md"
-            )
+            relpath = f"{prefix}{start} {safe_name(name)}__{activity.get('strava_id') or act_id}.md"
         filepath = f"{ACTIVITIES_DIR}/{relpath}"
 
         # Note with this ID already exists at this path → skip (unless --force).
@@ -119,23 +117,25 @@ def sync(force: bool = False) -> None:
         # Disable elevation correction (DEM) — use device barometer, consistent
         # with Strava/Garmin. total_elevation_gain is recalculated server-side,
         # so we re-fetch the activity after the PUT.
-        if a.get("use_elevation_correction"):
+        if activity.get("use_elevation_correction"):
             if set_elevation_correction(act_id, False):
                 time.sleep(2.5)
                 fresh = get_activity(act_id)
                 if fresh and fresh.get("total_elevation_gain") is not None:
-                    a = fresh
+                    activity = fresh
 
         intervals_data = fetch_intervals(act_id)
         weather = None
-        if a.get("start_date_local") and a.get("type") not in (
+        if activity.get("start_date_local") and activity.get("type") not in (
             "WeightTraining",
             "Workout",
             "VirtualRide",
             "Swim",
         ):
-            weather = fetch_weather(DEFAULT_LAT, DEFAULT_LON, a["start_date_local"])
-        note = activity_note(a, intervals_data, weather)
+            weather = fetch_weather(
+                DEFAULT_LAT, DEFAULT_LON, activity["start_date_local"]
+            )
+        note = activity_note(activity, intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue
 
@@ -154,16 +154,16 @@ def sync(force: bool = False) -> None:
         claimed[relpath] = act_id
 
         new_count += 1
-        dt = datetime.strptime(start, "%Y-%m-%d")
-        iso = dt.isocalendar()
-        weeks_to_update.add((iso[0], iso[1]))
+        activity_date = datetime.strptime(start, "%Y-%m-%d")
+        iso_calendar = activity_date.isocalendar()
+        weeks_to_update.add((iso_calendar[0], iso_calendar[1]))
         print(f"  ✓ {relpath}")
 
     for year, week_num in weeks_to_update:
         summary = week_summary(activities, year, week_num)
         if summary:
-            wf = f"{WEEKLY_DIR}/{year}-W{week_num:02d}-sport.md"
-            if write_text_safe(wf, summary):
+            weekly_note_path = f"{WEEKLY_DIR}/{year}-W{week_num:02d}-sport.md"
+            if write_text_safe(weekly_note_path, summary):
                 print(f"  📊 {year}-W{week_num:02d}-sport.md updated")
 
     save_state({"last_sync": datetime.now().isoformat()})
