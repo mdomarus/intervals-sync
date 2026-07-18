@@ -63,6 +63,17 @@ class Activity(TypedDict, total=False):
     use_elevation_correction: bool
 
 
+class WellnessDay(TypedDict, total=False):
+    id: str  # day, "YYYY-MM-DD"
+    ctl: float
+    atl: float
+    atlLoad: float
+    rampRate: float
+
+
+WellnessSeries = list[WellnessDay]
+
+
 class State(TypedDict):
     last_sync: str | None
 
