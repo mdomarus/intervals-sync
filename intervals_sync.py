@@ -3,18 +3,15 @@ import os
 import sys
 import time
 import urllib.request
-import urllib.parse
-import urllib.error
 import base64
-import math
 import glob
 import re
 from datetime import datetime, timedelta, date
 from weather import fetch_weather, wind_label
-from state import save_state
+from state import load_state, save_state
 
 
-def _load_secrets():
+def _load_secrets() -> tuple[str, str, str, str]:
     """athlete_id + api_key z gitignorowanego secrets.json obok skryptu
     (fallback: zmienne środowiskowe INTERVALS_ATHLETE_ID / INTERVALS_API_KEY, INTERVALS_VAULT_PATH)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json")
@@ -76,16 +73,23 @@ def write_text_safe(path, content, retries=4, delay=1.5):
     return False
 
 
+def get_creds() -> str:
+    return base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
+
+
+def get_headers():
+    return {
+        "Authorization": f"Basic {get_creds()}",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 intervals-sync",
+    }
+
+
 def api_get(path: str):
     url = f"{INTERVALS_API_URL}/athlete/{ATHLETE_ID}/{path}"
-    creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
     req = urllib.request.Request(
         url,
-        headers={
-            "Authorization": f"Basic {creds}",
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 intervals-sync",
-        },
+        headers=get_headers(),
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
@@ -95,14 +99,9 @@ def get_activity(act_id: str):
     """Świeży pojedynczy rekord aktywności (np. po zmianie ustawień serwerowych)."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}"
-        creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
         req = urllib.request.Request(
             url,
-            headers={
-                "Authorization": f"Basic {creds}",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 intervals-sync",
-            },
+            headers=get_headers(),
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
@@ -111,20 +110,19 @@ def get_activity(act_id: str):
         return None
 
 
-def set_elevation_correction(act_id: str, value: bool):
+def set_elevation_correction(act_id: str, value: bool) -> bool:
     """Wyłącza/włącza korektę elewacji intervals.icu (DEM). Wyłączona = zegarek
     (barometr) — wartość zgodna ze Stravą/Garminem, której ufa Michał. Zwraca
     True przy sukcesie. Po PUT serwer przelicza total_elevation_gain asynchronicznie."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}"
-        creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
         data = json.dumps({"use_elevation_correction": value}).encode()
         req = urllib.request.Request(
             url,
             data=data,
             method="PUT",
             headers={
-                "Authorization": f"Basic {creds}",
+                "Authorization": f"Basic {get_creds()}",
                 "Accept": "application/json",
                 "Content-Type": "application/json",
                 "User-Agent": "Mozilla/5.0 intervals-sync",
@@ -138,7 +136,7 @@ def set_elevation_correction(act_id: str, value: bool):
         return False
 
 
-def hms(s):
+def hms(s) -> str:
     if not s:
         return "—"
     s = int(s)
@@ -178,7 +176,7 @@ def emoji(t):
     }.get(t, "🏅")
 
 
-def safe_name(s):
+def safe_name(text: str):
     import unicodedata
 
     def keep(c):
@@ -187,7 +185,7 @@ def safe_name(s):
         cat = unicodedata.category(c)
         return cat in ("So", "Sm", "Sk", "Sc")  # emoji i symbole Unicode
 
-    return "".join(c if keep(c) else "_" for c in s)
+    return "".join(c if keep(c) else "_" for c in text)
 
 
 def scan_existing_notes():
@@ -236,48 +234,14 @@ def hr_zones_summary(zone_times, zone_limits):
     return " | ".join(parts)
 
 
-def fetch_streams(act_id: str):
-    """Pobiera streams (time, latlng) — używane do obliczenia bearing per split."""
-    try:
-        url = f"{INTERVALS_API_URL}/activity/{act_id}/streams"
-        creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Basic {creds}",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 intervals-sync",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-        return {s.get("type"): s.get("data") for s in data}
-    except Exception as e:
-        print(f"  ⚠ streams fetch failed for {act_id}: {e}")
-        return {}
 
-
-def bearing(lat1, lon1, lat2, lon2):
-    """Bearing (kierunek ruchu) w stopniach, 0=N, 90=E."""
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dlon = math.radians(lon2 - lon1)
-    y = math.sin(dlon) * math.cos(p2)
-    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dlon)
-    return (math.degrees(math.atan2(y, x)) + 360) % 360
-
-
-def fetch_intervals(act_id):
+def fetch_intervals(act_id: str):
     """Pobiera szczegółowe splity (WORK/RECOVERY) dla aktywności."""
     try:
         url = f"{INTERVALS_API_URL}/activity/{act_id}/intervals"
-        creds = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
         req = urllib.request.Request(
             url,
-            headers={
-                "Authorization": f"Basic {creds}",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 intervals-sync",
-            },
+            headers=get_headers(),
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
@@ -286,24 +250,7 @@ def fetch_intervals(act_id):
         return None
 
 
-def split_bearing(latlng, time_stream, start_index, moving_time):
-    """Bearing splitu na podstawie latlng od start_index do start_index+moving_time."""
-    if not latlng or not time_stream:
-        return None
-    n = len(latlng)
-    if start_index >= n:
-        return None
-    end = min(start_index + moving_time, n - 1)
-    if end <= start_index:
-        return None
-    lat1, lon1 = latlng[start_index]
-    lat2, lon2 = latlng[end]
-    if lat1 == lat2 and lon1 == lon2:
-        return None
-    return bearing(lat1, lon1, lat2, lon2)
-
-
-def splits_table(intervals_data, atype, streams=None, weather=None):
+def splits_table(intervals_data, atype, weather=None):
     """Buduje tabelę splitów z odpowiedzi /intervals + wiatr per split."""
     if not intervals_data:
         return []
@@ -311,10 +258,7 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
     if not ivs:
         return []
     is_run = atype in ("Run", "TrailRun")
-    latlng = (streams or {}).get("latlng")
-    time_stream = (streams or {}).get("time")
     wind_dir = (weather or {}).get("wind_dir")
-    show_wind = bool(latlng and wind_dir is not None)
     lines = ["", "## Splity (intervals.icu)", ""]
     if is_run:
         hdr = (
@@ -324,9 +268,6 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
     else:
         hdr = "| # | Typ | Dystans | Czas | Speed | HR avg | HR max | Zone | Int |"
         sep = "|--:|:---|--------:|-----:|------:|-------:|-------:|-----:|----:|"
-    if show_wind:
-        hdr += " Wiatr |"
-        sep += "------|"
     lines.append(hdr)
     lines.append(sep)
     for i, iv in enumerate(ivs, 1):
@@ -349,14 +290,11 @@ def splits_table(intervals_data, atype, streams=None, weather=None):
             sp = speed_kmh(iv.get("average_speed"))
             sp_s = f"{sp} km/h" if sp else "—"
             row = f"| {i} | {t_short} | {dist_s} | {time_s} | {sp_s} | {hr} | {hrx} | Z{z} | {intens} |"
-        if show_wind:
-            crs = split_bearing(latlng, time_stream, iv.get("start_index", 0), mt)
-            row += f" {wind_label(crs, wind_dir)} |"
         lines.append(row)
     return lines
 
 
-def activity_note(a, intervals_data=None, streams=None, weather=None):
+def activity_note(a, intervals_data=None, weather=None):
     atype = val(a, "type", "Unknown")
     act_id = val(a, "id", "")
     em = emoji(atype)
@@ -612,8 +550,7 @@ def activity_note(a, intervals_data=None, streams=None, weather=None):
         ):
             lines.append(r)
 
-    # Splity szczegółowe (WORK/RECOVERY z /intervals endpoint, z wiatrem per split)
-    lines += splits_table(intervals_data, atype, streams, weather)
+    lines += splits_table(intervals_data, atype, weather)
 
     # Interwały (auto-grupy z interval_summary)
     if interval_summary:
@@ -725,7 +662,13 @@ def week_summary(activities, year, week_num):
 
 
 def sync(force=False):
-    oldest = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+    state = load_state()
+
+    if not force and state.get("last_sync"):
+        oldest = datetime.fromisoformat(state["last_sync"]).strftime("%Y-%m-%d")
+    else:
+        oldest = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+
     newest = datetime.now().strftime("%Y-%m-%d")
     print(f"Pobieram aktywności {oldest} → {newest}...")
     activities = api_get(f"activities?oldest={oldest}&newest={newest}")
@@ -782,7 +725,7 @@ def sync(force=False):
             "Swim",
         ):
             weather = fetch_weather(DEFAULT_LAT, DEFAULT_LON, a["start_date_local"])
-        note = activity_note(a, intervals_data, None, weather)
+        note = activity_note(a, intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue
 
