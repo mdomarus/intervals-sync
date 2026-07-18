@@ -76,13 +76,11 @@ def write_text_safe(
     return False
 
 
-def get_creds() -> str:
-    return base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
-
-
 def get_headers() -> dict[str, str]:
+    creds: str = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
+
     return {
-        "Authorization": f"Basic {get_creds()}",
+        "Authorization": f"Basic {creds}",
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0 intervals-sync",
     }
