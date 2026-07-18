@@ -11,8 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Lowest supported version and a current one, to validate the floor.
-        python-version: ["3.10", "3.13"]
+        # Lowest supported version and the current stable, to validate the floor.
+        python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v7
 
