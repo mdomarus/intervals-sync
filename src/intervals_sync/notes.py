@@ -23,6 +23,8 @@ from .units import (
     format_elevation,
     format_pace,
     format_speed,
+    format_temperature,
+    format_wind_speed,
 )
 
 
@@ -317,11 +319,15 @@ def activity_note(
             filter(
                 None,
                 [
-                    format_markdown_row("Temp avg", f"{round(temp_avg, 1)}", "°C"),
+                    format_markdown_row(
+                        "Temp avg", format_temperature(temp_avg, prefs.temperature_unit)
+                    ),
                     format_markdown_row(
                         "Temp min/max",
-                        f"{temp_min}/{temp_max}" if temp_min is not None else None,
-                        "°C",
+                        f"{format_temperature(temp_min, prefs.temperature_unit)}/"
+                        f"{format_temperature(temp_max, prefs.temperature_unit)}"
+                        if temp_min is not None and temp_max is not None
+                        else None,
                     ),
                     format_markdown_row(
                         "Altitude avg",
@@ -368,23 +374,20 @@ def activity_note(
                 [
                     format_markdown_row(
                         "Temperature",
-                        f"{round(weather['temp'], 1)}"
-                        if weather.get("temp") is not None
-                        else None,
-                        "°C",
+                        format_temperature(weather.get("temp"), prefs.temperature_unit),
                     ),
                     format_markdown_row(
                         "Wind",
-                        f"{round(weather['wind_speed'], 1)} km/h from {int(weather['wind_dir'])}°"
+                        f"{format_wind_speed(weather['wind_speed'], prefs.wind_speed_unit)}"
+                        f" from {int(weather['wind_dir'])}°"
                         if weather.get("wind_speed") is not None
                         else None,
                     ),
                     format_markdown_row(
                         "Gusts",
-                        f"{round(weather['wind_gust'], 1)}"
-                        if weather.get("wind_gust") is not None
-                        else None,
-                        "km/h",
+                        format_wind_speed(
+                            weather.get("wind_gust"), prefs.wind_speed_unit
+                        ),
                     ),
                 ],
             )

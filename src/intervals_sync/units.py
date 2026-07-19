@@ -9,11 +9,44 @@ METERS_PER_KM = 1000.0
 METERS_PER_YARD = 0.9144
 MPS_TO_MPH = 2.236936
 MPS_TO_KMH = 3.6
+KM_PER_MILE = 1.609344
+KMH_TO_MPS = 3.6
+KMH_TO_KNOTS = 1.852
+
+# Upper km/h bound of each Beaufort force, index = force number. Force 12 is
+# open-ended (anything above force 11's ceiling), so the list stops at 11.
+_BEAUFORT_UPPER_KMH = (
+    1.0,
+    5.0,
+    11.0,
+    19.0,
+    28.0,
+    38.0,
+    49.0,
+    61.0,
+    74.0,
+    88.0,
+    102.0,
+    117.0,
+)
 
 
 class UnitSystem(str, Enum):
     METRIC = "METRIC"
     IMPERIAL = "IMPERIAL"
+
+
+class TemperatureUnit(str, Enum):
+    CELSIUS = "CELSIUS"
+    FAHRENHEIT = "FAHRENHEIT"
+
+
+class WindSpeedUnit(str, Enum):
+    KMH = "KMH"
+    MPH = "MPH"
+    MPS = "MPS"
+    KNOTS = "KNOTS"
+    BFT = "BFT"
 
 
 class PaceUnit(str, Enum):
@@ -68,6 +101,36 @@ def format_speed(mps: float | None, system: UnitSystem) -> str | None:
     return f"{mps * MPS_TO_KMH:.1f} km/h"
 
 
+def format_temperature(celsius: float | None, unit: TemperatureUnit) -> str | None:
+    if celsius is None:
+        return None
+    if unit is TemperatureUnit.FAHRENHEIT:
+        return f"{celsius * 9 / 5 + 32:.1f} °F"
+    return f"{celsius:.1f} °C"
+
+
+def _beaufort_force(kmh: float) -> int:
+    """Map a km/h wind speed to its Beaufort force number (0-12)."""
+    for force, upper_kmh in enumerate(_BEAUFORT_UPPER_KMH):
+        if kmh < upper_kmh:
+            return force
+    return len(_BEAUFORT_UPPER_KMH)  # force 12: above the last bounded force
+
+
+def format_wind_speed(kmh: float | None, unit: WindSpeedUnit) -> str | None:
+    if kmh is None:
+        return None
+    if unit is WindSpeedUnit.MPH:
+        return f"{kmh / KM_PER_MILE:.1f} mph"
+    if unit is WindSpeedUnit.MPS:
+        return f"{kmh / KMH_TO_MPS:.1f} m/s"
+    if unit is WindSpeedUnit.KNOTS:
+        return f"{kmh / KMH_TO_KNOTS:.1f} kn"
+    if unit is WindSpeedUnit.BFT:
+        return f"{_beaufort_force(kmh)} Bft"
+    return f"{kmh:.1f} km/h"
+
+
 def format_elevation(meters: float | None, system: UnitSystem) -> str | None:
     if meters is None:
         return None
@@ -93,6 +156,8 @@ class UnitPreferences:
 
     system: UnitSystem
     pace_by_type: dict[str, PaceUnit]
+    temperature_unit: TemperatureUnit = TemperatureUnit.CELSIUS
+    wind_speed_unit: WindSpeedUnit = WindSpeedUnit.KMH
 
     def pace_unit_for(self, activity_type: str) -> PaceUnit:
         configured = self.pace_by_type.get(activity_type)
@@ -121,4 +186,13 @@ class UnitPreferences:
                 continue
             for activity_type in sport_setting.get("types") or []:
                 pace_by_type[activity_type] = pace_unit
-        return cls(system, pace_by_type)
+        temperature_unit = (
+            TemperatureUnit.FAHRENHEIT
+            if profile.get("fahrenheit")
+            else TemperatureUnit.CELSIUS
+        )
+        try:
+            wind_speed_unit = WindSpeedUnit(profile.get("wind_speed"))
+        except ValueError:
+            wind_speed_unit = WindSpeedUnit.KMH
+        return cls(system, pace_by_type, temperature_unit, wind_speed_unit)

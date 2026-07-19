@@ -1,11 +1,15 @@
 from intervals_sync.units import (
     PaceUnit,
+    TemperatureUnit,
     UnitPreferences,
     UnitSystem,
+    WindSpeedUnit,
     format_distance,
     format_elevation,
     format_pace,
     format_speed,
+    format_temperature,
+    format_wind_speed,
 )
 
 
@@ -78,6 +82,48 @@ class TestFormatPace:
         assert format_pace(0, 3000, PaceUnit.MINS_KM) is None
 
 
+class TestFormatTemperature:
+    def test_celsius_passthrough(self) -> None:
+        assert format_temperature(12.63, TemperatureUnit.CELSIUS) == "12.6 °C"
+
+    def test_fahrenheit_conversion(self) -> None:
+        # 20 °C * 9/5 + 32 = 68.0 °F
+        assert format_temperature(20, TemperatureUnit.FAHRENHEIT) == "68.0 °F"
+
+    def test_zero_converts_not_absent(self) -> None:
+        assert format_temperature(0, TemperatureUnit.FAHRENHEIT) == "32.0 °F"
+
+    def test_none_returns_none(self) -> None:
+        assert format_temperature(None, TemperatureUnit.CELSIUS) is None
+
+
+class TestFormatWindSpeed:
+    def test_kmh_passthrough(self) -> None:
+        assert format_wind_speed(19.08, WindSpeedUnit.KMH) == "19.1 km/h"
+
+    def test_mph_conversion(self) -> None:
+        # 36 km/h / 1.609344 = 22.37 mph → 22.4 mph
+        assert format_wind_speed(36, WindSpeedUnit.MPH) == "22.4 mph"
+
+    def test_mps_conversion(self) -> None:
+        # 36 km/h / 3.6 = 10.0 m/s
+        assert format_wind_speed(36, WindSpeedUnit.MPS) == "10.0 m/s"
+
+    def test_knots_conversion(self) -> None:
+        # 36 km/h / 1.852 = 19.44 kn → 19.4 kn
+        assert format_wind_speed(36, WindSpeedUnit.KNOTS) == "19.4 kn"
+
+    def test_beaufort_is_integer_scale(self) -> None:
+        # 36 km/h falls in Beaufort 5 (29-38 km/h); no decimal, no unit suffix.
+        assert format_wind_speed(36, WindSpeedUnit.BFT) == "5 Bft"
+
+    def test_beaufort_calm(self) -> None:
+        assert format_wind_speed(0.5, WindSpeedUnit.BFT) == "0 Bft"
+
+    def test_none_returns_none(self) -> None:
+        assert format_wind_speed(None, WindSpeedUnit.KMH) is None
+
+
 class TestUnitPreferencesFromAthlete:
     def test_none_profile_defaults_to_metric(self) -> None:
         prefs = UnitPreferences.from_athlete(None)
@@ -113,6 +159,27 @@ class TestUnitPreferencesFromAthlete:
         profile = {"sportSettings": [{"types": ["Run"], "pace_units": "FURLONGS"}]}
         prefs = UnitPreferences.from_athlete(profile)
         assert "Run" not in prefs.pace_by_type
+
+    def test_defaults_temperature_celsius_and_wind_kmh(self) -> None:
+        prefs = UnitPreferences.from_athlete(None)
+        assert prefs.temperature_unit is TemperatureUnit.CELSIUS
+        assert prefs.wind_speed_unit is WindSpeedUnit.KMH
+
+    def test_fahrenheit_flag_selects_fahrenheit(self) -> None:
+        prefs = UnitPreferences.from_athlete({"fahrenheit": True})
+        assert prefs.temperature_unit is TemperatureUnit.FAHRENHEIT
+
+    def test_fahrenheit_false_stays_celsius(self) -> None:
+        prefs = UnitPreferences.from_athlete({"fahrenheit": False})
+        assert prefs.temperature_unit is TemperatureUnit.CELSIUS
+
+    def test_wind_speed_enum_is_parsed(self) -> None:
+        prefs = UnitPreferences.from_athlete({"wind_speed": "MPH"})
+        assert prefs.wind_speed_unit is WindSpeedUnit.MPH
+
+    def test_unknown_wind_speed_defaults_kmh(self) -> None:
+        prefs = UnitPreferences.from_athlete({"wind_speed": "GUSTS"})
+        assert prefs.wind_speed_unit is WindSpeedUnit.KMH
 
 
 class TestPaceUnitFor:
