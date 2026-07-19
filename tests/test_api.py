@@ -1,4 +1,5 @@
 import urllib.error
+from collections.abc import Sequence
 from typing import Any
 from unittest import mock
 
@@ -10,9 +11,15 @@ _FAKE_SETTINGS: Settings = {
     "api_key": "key",
     "activities_dir": "/tmp/acts",
     "weekly_dir": "/tmp/weekly",
-    "default_lat": 0.0,
-    "default_lon": 0.0,
 }
+
+
+def _latlng_stream(
+    lats: Sequence[float | None], lons: Sequence[float | None]
+) -> list[dict]:
+    """Shape a intervals.icu latlng stream response: parallel data (lat) and
+    data2 (lon) arrays, matched by index."""
+    return [{"type": "latlng", "data": lats, "data2": lons}]
 
 
 class TestGetAthlete:
@@ -32,6 +39,58 @@ class TestGetAthlete:
             ),
         ):
             assert api.get_athlete() is None
+
+
+class TestFetchActivityMidpoint:
+    def test_returns_point_nearest_the_time_middle(self) -> None:
+        # Middle index (2) has a valid fix — used as the activity's representative
+        # location (roughly mid-way through time for an evenly sampled stream).
+        lats = [54.60, 54.61, 54.62, 54.63, 54.64]
+        lons = [18.30, 18.31, 18.32, 18.33, 18.34]
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(api, "_request", return_value=_latlng_stream(lats, lons)),
+        ):
+            assert api.fetch_activity_midpoint("i1") == (54.62, 18.32)
+
+    def test_searches_outward_when_middle_is_a_gps_gap(self) -> None:
+        # Middle sample is a GPS drop-out (None) — fall back to the nearest
+        # index on either side that has both coordinates.
+        lats = [54.60, 54.61, None, 54.63, 54.64]
+        lons = [18.30, 18.31, None, 18.33, 18.34]
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(api, "_request", return_value=_latlng_stream(lats, lons)),
+        ):
+            assert api.fetch_activity_midpoint("i1") == (54.63, 18.33)
+
+    def test_returns_none_when_stream_is_all_gaps(self) -> None:
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(
+                api,
+                "_request",
+                return_value=_latlng_stream([None, None], [None, None]),
+            ),
+        ):
+            assert api.fetch_activity_midpoint("i1") is None
+
+    def test_returns_none_when_no_latlng_stream(self) -> None:
+        # Indoor / GPS-less activity: intervals.icu returns an empty stream list.
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(api, "_request", return_value=[]),
+        ):
+            assert api.fetch_activity_midpoint("i1") is None
+
+    def test_returns_none_on_network_error(self) -> None:
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(
+                api, "_request", side_effect=urllib.error.URLError("down")
+            ),
+        ):
+            assert api.fetch_activity_midpoint("i1") is None
 
 
 class TestFetchWellness:

@@ -9,6 +9,7 @@ from typing import cast
 
 from .api import (
     api_get,
+    fetch_activity_midpoint,
     fetch_intervals,
     fetch_wellness,
     get_activity,
@@ -85,8 +86,6 @@ def sync(force: bool = False) -> None:
     settings = get_settings()
     activities_dir = settings["activities_dir"]
     weekly_dir = settings["weekly_dir"]
-    default_lat = settings["default_lat"]
-    default_lon = settings["default_lon"]
 
     state: State = load_state()
     unit_preferences = UnitPreferences.from_athlete(get_athlete())
@@ -152,9 +151,15 @@ def sync(force: bool = False) -> None:
             activity.get("start_date_local")
             and activity.get("type") not in WEATHER_EXCLUDED_TYPES
         ):
-            weather = fetch_weather(
-                default_lat, default_lon, activity["start_date_local"]
-            )
+            # Weather is looked up at the activity's actual location (mid-route
+            # GPS point), not a fixed home city. No GPS fix → no weather, rather
+            # than a wrong reading for somewhere the athlete wasn't.
+            midpoint = fetch_activity_midpoint(act_id)
+            if midpoint is not None:
+                latitude, longitude = midpoint
+                weather = fetch_weather(
+                    latitude, longitude, activity["start_date_local"]
+                )
         note = activity_note(activity, unit_preferences, intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue

@@ -24,15 +24,13 @@ Copy `secrets.json.example` → `secrets.json` (gitignored) and fill in your val
   "athlete_id": "...",
   "api_key": "...",
   "activities_dir": "/path/to/vault/activities",
-  "weekly_dir": "/path/to/vault/weekly",
-  "default_lat": 54.5189,
-  "default_lon": 18.5305
+  "weekly_dir": "/path/to/vault/weekly"
 }
 ```
 
-`api_key` comes from intervals.icu → Settings → Developer. `default_lat`/`default_lon` are the coordinates used for the weather lookup — optional, and default to Gdynia (54.5189, 18.5305) when omitted.
+`api_key` comes from intervals.icu → Settings → Developer.
 
-Alternatively, set environment variables: `INTERVALS_ATHLETE_ID`, `INTERVALS_API_KEY`, `INTERVALS_ACTIVITIES_DIR`, `INTERVALS_WEEKLY_DIR`, and optionally `INTERVALS_DEFAULT_LAT`, `INTERVALS_DEFAULT_LON`.
+Alternatively, set environment variables: `INTERVALS_ATHLETE_ID`, `INTERVALS_API_KEY`, `INTERVALS_ACTIVITIES_DIR`, `INTERVALS_WEEKLY_DIR`.
 
 ### 3. Run
 
@@ -57,7 +55,7 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 **Elevation** — `use_elevation_correction` (DEM) is disabled per activity so `total_elevation_gain` matches the device barometer, consistent with Strava/Garmin. The activity is re-fetched after the PUT to pick up the recalculated value.
 
-**Weather** — temperature and wind at activity start time are fetched from Open-Meteo (up to 92 days back) for the configured `default_lat`/`default_lon` and appended to the note. Skipped for indoor types (`WeightTraining`, `Workout`, `VirtualRide`, `Swim`).
+**Weather** — temperature and wind at activity start time are fetched from Open-Meteo (up to 92 days back) at the activity's actual location and appended to the note. The location is the GPS point nearest the activity's time middle (from the `latlng` stream), so long point-to-point rides get weather for where they were, not a fixed home city. Skipped for indoor types (`WeightTraining`, `Workout`, `VirtualRide`, `Swim`) and for activities with no GPS fix — no weather is shown rather than a wrong reading.
 
 **Splits** — structured WORK/RECOVERY interval data from intervals.icu is rendered as a markdown table.
 

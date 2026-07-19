@@ -10,8 +10,6 @@ class Settings(TypedDict):
     api_key: str
     activities_dir: str
     weekly_dir: str
-    default_lat: float
-    default_lon: float
 
 
 class ConfigError(RuntimeError):
@@ -20,9 +18,6 @@ class ConfigError(RuntimeError):
     Carries a user-facing message so the CLI can print it instead of dumping a
     traceback when someone runs the tool before configuring it."""
 
-
-# Gdynia — used for the weather lookup when the config doesn't override the location.
-FALLBACK_LAT, FALLBACK_LON = 54.5189, 18.5305
 
 INTERVALS_API_URL = "https://intervals.icu/api/v1"
 # How far back to sync when there is no recorded last-sync timestamp.
@@ -126,8 +121,6 @@ def _load_from_secrets(secrets_path: Path) -> Settings:
         "api_key": secrets["api_key"],
         "activities_dir": secrets["activities_dir"],
         "weekly_dir": secrets["weekly_dir"],
-        "default_lat": float(secrets.get("default_lat", FALLBACK_LAT)),
-        "default_lon": float(secrets.get("default_lon", FALLBACK_LON)),
     }
 
 
@@ -144,8 +137,6 @@ def _load_from_env() -> Settings:
         "api_key": os.environ["INTERVALS_API_KEY"],
         "activities_dir": os.environ["INTERVALS_ACTIVITIES_DIR"],
         "weekly_dir": os.environ["INTERVALS_WEEKLY_DIR"],
-        "default_lat": float(os.environ.get("INTERVALS_DEFAULT_LAT", FALLBACK_LAT)),
-        "default_lon": float(os.environ.get("INTERVALS_DEFAULT_LON", FALLBACK_LON)),
     }
 
 
@@ -156,8 +147,7 @@ def get_settings() -> Settings:
 
     Loading is deferred until first call (not import time) so the package can be
     imported and tested without credentials present. Raises ConfigError with a
-    user-facing message when required values are absent or malformed. Coordinates
-    are optional and fall back to Gdynia (FALLBACK_LAT / FALLBACK_LON)."""
+    user-facing message when required values are absent or malformed."""
     secrets_path = _find_secrets_file()
     if secrets_path is not None:
         return _load_from_secrets(secrets_path)

@@ -23,15 +23,13 @@ REQUIRED = {
 
 def test_loads_from_secrets_file(tmp_path, monkeypatch) -> None:
     secrets_path = tmp_path / "secrets.json"
-    secrets_path.write_text(json.dumps({**REQUIRED, "default_lat": 50.0}))
+    secrets_path.write_text(json.dumps(REQUIRED))
     monkeypatch.setattr(config, "_find_secrets_file", lambda: secrets_path)
 
     settings = config.get_settings()
 
     assert settings["athlete_id"] == "i12345"
-    assert settings["default_lat"] == 50.0
-    # unspecified coordinate falls back to the module default
-    assert settings["default_lon"] == config.FALLBACK_LON
+    assert settings["activities_dir"] == "/tmp/activities"
 
 
 def test_missing_key_in_secrets_raises_config_error(tmp_path, monkeypatch) -> None:

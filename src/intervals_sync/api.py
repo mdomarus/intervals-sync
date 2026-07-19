@@ -98,6 +98,49 @@ def fetch_intervals(act_id: str) -> dict[str, Any] | None:
         return None
 
 
+def fetch_activity_midpoint(act_id: str) -> tuple[float, float] | None:
+    """Representative GPS location of an activity: the point nearest its time
+    middle, taken from the latlng stream (data = latitudes, data2 = longitudes,
+    matched by index). For long point-to-point rides/runs this is more
+    representative than the start, which is what the weather lookup wants.
+
+    Searches outward from the middle index to skip GPS drop-outs (None samples).
+    Returns None for GPS-less activities (indoor: empty stream) or a stream with
+    no usable fix, so the caller can omit weather rather than guess a location."""
+    try:
+        streams = _request(
+            "GET", f"{INTERVALS_API_URL}/activity/{act_id}/streams?types=latlng"
+        )
+    except (
+        urllib.error.URLError,
+        http.client.IncompleteRead,
+        json.JSONDecodeError,
+    ) as e:
+        print(f"  ⚠️  latlng stream fetch failed for {act_id}: {e}")
+        return None
+
+    latlng_stream = next(
+        (stream for stream in streams if stream.get("type") == "latlng"), None
+    )
+    if latlng_stream is None:
+        return None
+    latitudes = latlng_stream.get("data") or []
+    longitudes = latlng_stream.get("data2") or []
+    sample_count = min(len(latitudes), len(longitudes))
+    if sample_count == 0:
+        return None
+
+    middle = sample_count // 2
+    for offset in range(sample_count):
+        for index in (middle + offset, middle - offset):
+            if 0 <= index < sample_count:
+                latitude = latitudes[index]
+                longitude = longitudes[index]
+                if latitude is not None and longitude is not None:
+                    return (latitude, longitude)
+    return None
+
+
 def fetch_wellness(oldest: str, newest: str) -> WellnessSeries | None:
     """Daily wellness rows (CTL/ATL/atlLoad per day) for the date range.
 
