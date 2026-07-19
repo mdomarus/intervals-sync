@@ -56,8 +56,6 @@ class Activity(TypedDict, total=False):
     race: bool
     description: str
     tags: list[str]
-    icu_warmup_time: int
-    icu_cooldown_time: int
     interval_summary: list[Any]
     average_speed: float
     max_speed: float

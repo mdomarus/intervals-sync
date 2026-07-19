@@ -107,8 +107,6 @@ def activity_note(
     race = get_field(activity, "race", False)
     description = get_field(activity, "description", "") or ""
     tags = get_field(activity, "tags") or []
-    warmup = get_field(activity, "icu_warmup_time")
-    cooldown = get_field(activity, "icu_cooldown_time")
     interval_summary = get_field(activity, "interval_summary") or []
 
     tag_list = ["sport", "activity"]
@@ -203,12 +201,6 @@ def activity_note(
                     format_elevation(elev_loss, prefs.system)
                     if elev_loss > 0
                     else None,
-                ),
-                format_markdown_row(
-                    "Warmup", format_duration(warmup) if warmup else None
-                ),
-                format_markdown_row(
-                    "Cooldown", format_duration(cooldown) if cooldown else None
                 ),
             ],
         )
