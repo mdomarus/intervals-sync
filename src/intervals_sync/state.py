@@ -70,6 +70,17 @@ class Activity(TypedDict, total=False):
     gap_zone_times: list[int]
 
 
+class SportSetting(TypedDict, total=False):
+    types: list[str]
+    pace_units: str
+
+
+class Athlete(TypedDict, total=False):
+    id: str
+    measurement_preference: str
+    sportSettings: list[SportSetting]
+
+
 class WellnessDay(TypedDict, total=False):
     id: str  # day, "YYYY-MM-DD"
     ctl: float
