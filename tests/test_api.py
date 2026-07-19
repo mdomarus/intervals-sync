@@ -1,6 +1,37 @@
+import urllib.error
 from typing import Any
+from unittest import mock
 
-import intervals_sync.api as api
+from intervals_sync import api
+from intervals_sync.config import Settings
+
+_FAKE_SETTINGS: Settings = {
+    "athlete_id": "i123",
+    "api_key": "key",
+    "activities_dir": "/tmp/acts",
+    "weekly_dir": "/tmp/weekly",
+    "default_lat": 0.0,
+    "default_lon": 0.0,
+}
+
+
+class TestGetAthlete:
+    def test_returns_profile_on_success(self) -> None:
+        profile = {"id": "i123", "measurement_preference": "IMPERIAL"}
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(api, "_request", return_value=profile),
+        ):
+            assert api.get_athlete() == profile
+
+    def test_returns_none_on_network_error(self) -> None:
+        with (
+            mock.patch.object(api, "get_settings", return_value=_FAKE_SETTINGS),
+            mock.patch.object(
+                api, "_request", side_effect=urllib.error.URLError("down")
+            ),
+        ):
+            assert api.get_athlete() is None
 
 
 class TestFetchWellness:
