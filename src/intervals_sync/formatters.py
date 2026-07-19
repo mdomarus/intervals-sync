@@ -71,23 +71,46 @@ def format_markdown_row(label: str, value: Any, unit: str = "") -> str | None:
     return f"- **{label}:** {value}{(' ' + unit) if unit else ''}  "
 
 
-def hr_zones_summary(
+def hr_zones_table(
     zone_times: list[int] | None, zone_limits: list[int] | None
-) -> str | None:
+) -> list[str]:
+    """Build a markdown table of time-in-zone for heart-rate zones.
+
+    `zone_limits` are the lower bpm bound of each zone (intervals.icu
+    `icu_hr_zones`). Zones with no time are skipped. Returns [] when there is no
+    time in any zone.
+    """
     if not zone_times or not zone_limits:
-        return None
+        return []
     total = sum(zone_times)
     if total == 0:
-        return None
-    parts = []
+        return []
+    rows = ["| Zone | From | Time | % |", "|:-----|-----:|-----:|--:|"]
     for zone_idx, (zone_time, zone_limit) in enumerate(
         zip(zone_times, zone_limits, strict=False)
     ):
-        if zone_time > 0:
-            pct = round(zone_time / total * 100)
-            mins = zone_time // 60
-            parts.append(f"Z{zone_idx + 1} ({zone_limit}+bpm): {mins}min ({pct}%)")
-    return " | ".join(parts)
+        if zone_time == 0:
+            continue
+        pct = round(zone_time / total * 100)
+        rows.append(
+            f"| Z{zone_idx + 1} | {zone_limit}+ bpm "
+            f"| {format_zone_time(zone_time)} | {pct}% |"
+        )
+    return rows
+
+
+def format_cadence(cadence: float | None, activity_type: str) -> str | None:
+    """Render cadence, doubling running cadence to total steps/min.
+
+    intervals.icu reports single-leg cadence; the Garmin/Strava convention for
+    running is total steps per minute (both feet), so run types are doubled and
+    labelled "spm". Cycling cadence is crank RPM and is left as-is.
+    """
+    if not cadence:
+        return None
+    if activity_type in RUN_TYPES:
+        return f"{round(cadence * 2)} spm"
+    return f"{round(cadence)} rpm"
 
 
 def format_zone_time(seconds: int) -> str:

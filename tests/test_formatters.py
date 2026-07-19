@@ -1,9 +1,10 @@
 from typing import Any
 
 from intervals_sync.formatters import (
+    format_cadence,
     format_duration,
     format_zone_time,
-    hr_zones_summary,
+    hr_zones_table,
     iso_year_week,
     pace_zones_table,
     sanitize_filename,
@@ -159,17 +160,51 @@ class TestPaceZonesTable:
         assert table[2] == "| Z1 | — | 10:00 | 25% |"
 
 
-class TestHrZonesSummary:
-    def test_returns_none_without_data(self) -> None:
-        assert hr_zones_summary(None, None) is None
-        assert hr_zones_summary([], []) is None
+class TestHrZonesTable:
+    def test_returns_empty_without_data(self) -> None:
+        assert hr_zones_table(None, None) == []
+        assert hr_zones_table([], []) == []
 
-    def test_returns_none_when_all_zero(self) -> None:
-        assert hr_zones_summary([0, 0], [100, 150]) is None
+    def test_returns_empty_when_all_zero(self) -> None:
+        assert hr_zones_table([0, 0], [100, 150]) == []
 
-    def test_summarizes_active_zones_with_percentages(self) -> None:
-        summary = hr_zones_summary([600, 1800], [120, 150])
-        assert summary == "Z1 (120+bpm): 10min (25%) | Z2 (150+bpm): 30min (75%)"
+    def test_builds_table_with_lower_bounds(self) -> None:
+        table = hr_zones_table([600, 1800], [120, 150])
+        assert table == [
+            "| Zone | From | Time | % |",
+            "|:-----|-----:|-----:|--:|",
+            "| Z1 | 120+ bpm | 10:00 | 25% |",
+            "| Z2 | 150+ bpm | 30:00 | 75% |",
+        ]
+
+    def test_skips_zero_time_zones(self) -> None:
+        table = hr_zones_table([0, 1800, 600], [113, 137, 155])
+        rows = [row for row in table if row.startswith(("| Z1", "| Z2", "| Z3"))]
+        assert rows == [
+            "| Z2 | 137+ bpm | 30:00 | 75% |",
+            "| Z3 | 155+ bpm | 10:00 | 25% |",
+        ]
+
+    def test_keeps_sub_minute_seconds(self) -> None:
+        # 55s must render as 0:55, not the misleading "0min".
+        table = hr_zones_table([55, 3345], [120, 150])
+        assert table[2] == "| Z1 | 120+ bpm | 0:55 | 2% |"
+
+
+class TestFormatCadence:
+    def test_doubles_single_leg_for_run(self) -> None:
+        # intervals.icu reports one leg; running convention is total steps/min.
+        assert format_cadence(81.25, "Run") == "162 spm"
+
+    def test_doubles_for_trail_run(self) -> None:
+        assert format_cadence(90.0, "TrailRun") == "180 spm"
+
+    def test_keeps_rpm_for_ride(self) -> None:
+        assert format_cadence(88.0, "Ride") == "88 rpm"
+
+    def test_returns_none_when_absent(self) -> None:
+        assert format_cadence(None, "Run") is None
+        assert format_cadence(0, "Run") is None
 
 
 class TestSplitsTable:
