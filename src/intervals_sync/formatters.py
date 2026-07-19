@@ -76,16 +76,16 @@ def hr_zones_table(
 ) -> list[str]:
     """Build a markdown table of time-in-zone for heart-rate zones.
 
-    `zone_limits` are the lower bpm bound of each zone (intervals.icu
-    `icu_hr_zones`). Zones with no time are skipped. Returns [] when there is no
-    time in any zone.
+    `zone_limits` are the upper bpm bound of each zone (intervals.icu
+    `icu_hr_zones`); the last entry is HRmax. Zones with no time are skipped.
+    Returns [] when there is no time in any zone.
     """
     if not zone_times or not zone_limits:
         return []
     total = sum(zone_times)
     if total == 0:
         return []
-    rows = ["| Zone | From | Time | % |", "|:-----|-----:|-----:|--:|"]
+    rows = ["| Zone | Up to | Time | % |", "|:-----|-----:|-----:|--:|"]
     for zone_idx, (zone_time, zone_limit) in enumerate(
         zip(zone_times, zone_limits, strict=False)
     ):
@@ -93,7 +93,7 @@ def hr_zones_table(
             continue
         pct = round(zone_time / total * 100)
         rows.append(
-            f"| Z{zone_idx + 1} | {zone_limit}+ bpm "
+            f"| Z{zone_idx + 1} | ≤ {zone_limit} bpm "
             f"| {format_zone_time(zone_time)} | {pct}% |"
         )
     return rows

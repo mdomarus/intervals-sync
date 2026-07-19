@@ -168,27 +168,28 @@ class TestHrZonesTable:
     def test_returns_empty_when_all_zero(self) -> None:
         assert hr_zones_table([0, 0], [100, 150]) == []
 
-    def test_builds_table_with_lower_bounds(self) -> None:
+    def test_builds_table_with_upper_bounds(self) -> None:
+        # intervals.icu icu_hr_zones are the UPPER bpm bound of each zone.
         table = hr_zones_table([600, 1800], [120, 150])
         assert table == [
-            "| Zone | From | Time | % |",
+            "| Zone | Up to | Time | % |",
             "|:-----|-----:|-----:|--:|",
-            "| Z1 | 120+ bpm | 10:00 | 25% |",
-            "| Z2 | 150+ bpm | 30:00 | 75% |",
+            "| Z1 | ≤ 120 bpm | 10:00 | 25% |",
+            "| Z2 | ≤ 150 bpm | 30:00 | 75% |",
         ]
 
     def test_skips_zero_time_zones(self) -> None:
         table = hr_zones_table([0, 1800, 600], [113, 137, 155])
         rows = [row for row in table if row.startswith(("| Z1", "| Z2", "| Z3"))]
         assert rows == [
-            "| Z2 | 137+ bpm | 30:00 | 75% |",
-            "| Z3 | 155+ bpm | 10:00 | 25% |",
+            "| Z2 | ≤ 137 bpm | 30:00 | 75% |",
+            "| Z3 | ≤ 155 bpm | 10:00 | 25% |",
         ]
 
     def test_keeps_sub_minute_seconds(self) -> None:
         # 55s must render as 0:55, not the misleading "0min".
         table = hr_zones_table([55, 3345], [120, 150])
-        assert table[2] == "| Z1 | 120+ bpm | 0:55 | 2% |"
+        assert table[2] == "| Z1 | ≤ 120 bpm | 0:55 | 2% |"
 
 
 class TestFormatCadence:
