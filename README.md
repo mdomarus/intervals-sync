@@ -8,9 +8,9 @@ Sync <a href="https://intervals.icu">intervals.icu</a> activities to Obsidian ma
 <p>
   <a href="https://github.com/mdomarus/intervals-sync/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mdomarus/intervals-sync/actions/workflows/ci.yml/badge.svg"/></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-22c55e?style=flat"/></a>
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3b82f6?style=flat&logo=python&logoColor=white"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-a855f7?style=flat"/>
-  <img alt="Dependencies" src="https://img.shields.io/badge/runtime%20deps-0-f59e0b?style=flat"/>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3b82f6?logo=python&logoColor=white&style=flat&cacheSeconds=3600"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-a855f7?style=flat&cacheSeconds=3600"/>
+  <img alt="Dependencies" src="https://img.shields.io/badge/runtime_deps-0-f59e0b?style=flat&cacheSeconds=3600"/>
 </p>
 
 <p>
