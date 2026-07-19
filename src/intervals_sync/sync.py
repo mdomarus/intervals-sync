@@ -24,6 +24,7 @@ from .config import (
 from .formatters import iso_year_week, sanitize_filename
 from .notes import activity_note, week_summary
 from .state import Activity, State, load_state, save_state
+from .units import UnitPreferences, UnitSystem
 from .weather import fetch_weather
 
 
@@ -86,6 +87,10 @@ def sync(force: bool = False) -> None:
     weekly_dir = settings["weekly_dir"]
     default_lat = settings["default_lat"]
     default_lon = settings["default_lon"]
+
+    # TODO (Task 7): replace with UnitPreferences.from_athlete(get_athlete()) so
+    # the actual athlete profile drives unit selection.
+    unit_prefs = UnitPreferences(UnitSystem.METRIC, {})
 
     state: State = load_state()
 
@@ -152,7 +157,7 @@ def sync(force: bool = False) -> None:
             weather = fetch_weather(
                 default_lat, default_lon, activity["start_date_local"]
             )
-        note = activity_note(activity, intervals_data, weather)
+        note = activity_note(activity, unit_prefs, intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue
 
@@ -189,6 +194,7 @@ def sync(force: bool = False) -> None:
             [activity for activity in activities if activity.get("type") != "Walk"],
             year,
             week_num,
+            unit_prefs,
             wellness_series,
         )
         if summary:

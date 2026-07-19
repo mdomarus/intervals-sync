@@ -1,3 +1,5 @@
+from typing import Any
+
 from intervals_sync.formatters import (
     format_duration,
     hr_zones_summary,
@@ -94,7 +96,7 @@ class TestHrZonesSummary:
 
 
 class TestSplitsTable:
-    def _intervals(self) -> dict:
+    def _intervals(self) -> dict[str, Any]:
         return {
             "icu_intervals": [
                 {
