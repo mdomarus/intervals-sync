@@ -64,7 +64,6 @@ class Activity(TypedDict, total=False):
     use_elevation_correction: bool
     gap: float
     gap_model: str
-    pace: float
     threshold_pace: float
     pace_zones: list[float]
     pace_zone_times: list[int]
