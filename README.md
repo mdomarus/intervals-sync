@@ -61,7 +61,9 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 **Splits** — structured WORK/RECOVERY interval data from intervals.icu is rendered as a markdown table.
 
-**Pace zones** — for runs, a `## Pace Zones` table shows time-in-zone for pace and (when available) GAP side by side. The "Up to" column is each zone's upper pace bound, derived from your threshold pace (intervals.icu stores zone boundaries as percentages of threshold, not absolute speeds). The open-ended top zone has no bound.
+**Zone tables** — time-in-zone is rendered as markdown tables. The `## Heart Rate` section gets an HR-zone table (`From` = each zone's lower bpm bound). For runs, a `## Pace Zones` table shows pace and (when available) GAP side by side; its "Up to" column is each zone's upper pace bound, derived from your threshold pace (intervals.icu stores pace-zone boundaries as percentages of threshold, not absolute speeds), and the open-ended top zone has no bound.
+
+**Cadence** — intervals.icu reports single-leg cadence. For runs it is doubled to total steps per minute (`spm`), matching the Garmin/Strava convention; cycling cadence is left as crank RPM.
 
 **Units** — distance, pace, speed, and elevation follow your intervals.icu profile (`measurement_preference` plus per-sport pace units), so notes render in km/mi, min/km or min/mi, km/h or mph, and m/ft to match your account. Temperature is always shown in °C.
 

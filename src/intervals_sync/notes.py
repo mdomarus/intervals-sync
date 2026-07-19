@@ -4,10 +4,11 @@ from typing import Any
 from .config import RUN_TYPES
 from .formatters import (
     activity_emoji,
+    format_cadence,
     format_duration,
     format_markdown_row,
     get_field,
-    hr_zones_summary,
+    hr_zones_table,
     iso_year_week,
     pace_zones_table,
     sanitize_filename,
@@ -135,7 +136,7 @@ def activity_note(
     )
     speed_str = format_speed(get_field(activity, "average_speed"), prefs.system)
     max_speed_str = format_speed(get_field(activity, "max_speed"), prefs.system)
-    zones_str = hr_zones_summary(zone_times, zone_limits)
+    hr_zone_rows = hr_zones_table(zone_times, zone_limits)
 
     pace_zone_times = (
         get_field(activity, "pace_zone_times") if activity_type in RUN_TYPES else None
@@ -229,8 +230,8 @@ def activity_note(
                 ],
             )
         )
-        if zones_str:
-            lines.append(f"- **HR Zones:** {zones_str}  ")
+        if hr_zone_rows:
+            lines += ["", *hr_zone_rows]
 
     if pace_zone_rows:
         lines += ["", "## Pace Zones", ""]
@@ -344,7 +345,7 @@ def activity_note(
         filter(
             None,
             [
-                format_markdown_row("Cadence", int(cadence) if cadence else None),
+                format_markdown_row("Cadence", format_cadence(cadence, activity_type)),
                 format_markdown_row(
                     "Calories", int(calories) if calories else None, "kcal"
                 ),
