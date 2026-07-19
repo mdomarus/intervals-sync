@@ -12,6 +12,7 @@ from .api import (
     fetch_intervals,
     fetch_wellness,
     get_activity,
+    get_athlete,
     set_elevation_correction,
 )
 from .config import (
@@ -24,6 +25,7 @@ from .config import (
 from .formatters import iso_year_week, sanitize_filename
 from .notes import activity_note, week_summary
 from .state import Activity, State, load_state, save_state
+from .units import UnitPreferences
 from .weather import fetch_weather
 
 
@@ -88,6 +90,7 @@ def sync(force: bool = False) -> None:
     default_lon = settings["default_lon"]
 
     state: State = load_state()
+    unit_preferences = UnitPreferences.from_athlete(get_athlete())
 
     last_sync: str | None = state.get("last_sync")
     oldest: str
@@ -152,7 +155,7 @@ def sync(force: bool = False) -> None:
             weather = fetch_weather(
                 default_lat, default_lon, activity["start_date_local"]
             )
-        note = activity_note(activity, intervals_data, weather)
+        note = activity_note(activity, unit_preferences, intervals_data, weather)
         if not write_text_safe(filepath, note):
             continue
 
@@ -189,6 +192,7 @@ def sync(force: bool = False) -> None:
             [activity for activity in activities if activity.get("type") != "Walk"],
             year,
             week_num,
+            unit_preferences,
             wellness_series,
         )
         if summary:
