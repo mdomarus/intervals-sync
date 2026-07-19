@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 METERS_PER_MILE = 1609.344
 METERS_PER_FOOT = 0.3048
@@ -82,3 +84,40 @@ def format_pace(
     pace_secs = time_s / (dist_m / reference_meters)
     minutes, seconds = divmod(round(pace_secs), 60)
     return f"{minutes}:{seconds:02d} {_PACE_SUFFIX[pace_unit]}"
+
+
+@dataclass(frozen=True)
+class UnitPreferences:
+    """Athlete-configured units, resolved from the intervals.icu profile."""
+
+    system: UnitSystem
+    pace_by_type: dict[str, PaceUnit]
+
+    def pace_unit_for(self, activity_type: str) -> PaceUnit:
+        configured = self.pace_by_type.get(activity_type)
+        if configured is not None:
+            return configured
+        if self.system is UnitSystem.IMPERIAL:
+            return PaceUnit.MINS_MILE
+        return PaceUnit.MINS_KM
+
+    @classmethod
+    def from_athlete(cls, profile: dict[str, Any] | None) -> "UnitPreferences":
+        if not profile:
+            return cls(UnitSystem.METRIC, {})
+        raw_preference = str(profile.get("measurement_preference", "")).upper()
+        system = (
+            UnitSystem.IMPERIAL
+            if raw_preference == UnitSystem.IMPERIAL.value
+            else UnitSystem.METRIC
+        )
+        pace_by_type: dict[str, PaceUnit] = {}
+        for sport_setting in profile.get("sportSettings") or []:
+            raw_pace = sport_setting.get("pace_units")
+            try:
+                pace_unit = PaceUnit(raw_pace)
+            except ValueError:
+                continue
+            for activity_type in sport_setting.get("types") or []:
+                pace_by_type[activity_type] = pace_unit
+        return cls(system, pace_by_type)
