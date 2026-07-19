@@ -1,13 +1,36 @@
-# intervals-sync
+<div align="center">
 
-Syncs [intervals.icu](https://intervals.icu) activities to Obsidian markdown notes.
+# 🏃 intervals-sync
 
-- Activity notes → `YYYY/MM/YYYY-MM-DD <name>.md` under `activities_dir`
-- Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`, optionally including a deterministic **Load & trend** section (ACWR, ramp rate, week-over-week load, Foster monotony/strain, trailing trend table)
-- No third-party runtime dependencies — stdlib only
-- Requires Python 3.10+
+<strong>Your training log, in your vault.</strong><br/>
+Sync <a href="https://intervals.icu">intervals.icu</a> activities to Obsidian markdown notes — stdlib only, no runtime dependencies.
 
-## Setup
+<p>
+  <a href="https://github.com/mdomarus/intervals-sync/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mdomarus/intervals-sync/actions/workflows/ci.yml/badge.svg"/></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-22c55e?style=flat"/></a>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3b82f6?style=flat&logo=python&logoColor=white"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-a855f7?style=flat"/>
+  <img alt="Dependencies" src="https://img.shields.io/badge/runtime%20deps-0-f59e0b?style=flat"/>
+</p>
+
+<p>
+  <a href="#-setup">Setup</a> •
+  <a href="#-how-it-works">How it works</a> •
+  <a href="#-weekly-load--trend-metrics">Load &amp; trend</a> •
+  <a href="#-project-structure">Structure</a> •
+  <a href="#-development">Development</a>
+</p>
+
+</div>
+
+---
+
+- 📝 Activity notes → `YYYY/MM/YYYY-MM-DD <name>.md` under `activities_dir`
+- 📅 Weekly summaries → `YYYY-Www-sport.md` under `weekly_dir`, optionally including a deterministic **Load & trend** section (ACWR, ramp rate, week-over-week load, Foster monotony/strain, trailing trend table)
+- 📦 No third-party runtime dependencies — stdlib only
+- 🐍 Requires Python 3.10+
+
+## ⚙️ Setup
 
 ### 1. Install
 
@@ -49,7 +72,7 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 `install.sh` is macOS-only. On Linux, schedule `uv run intervals-sync` with cron or a systemd timer instead.
 
-## How it works
+## 🔧 How it works
 
 **Activity notes** are written to `YYYY/MM/YYYY-MM-DD <name>.md`. Each note has YAML frontmatter with `activity_id` — this is the source of truth for detecting renames and collisions. If an activity is renamed on intervals.icu, the old note is deleted and a new one is written. If two activities share the same name and date, the second gets a `__{strava_id}` suffix.
 
@@ -59,15 +82,15 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 **Splits** — structured WORK/RECOVERY interval data from intervals.icu is rendered as a markdown table.
 
-**Zone tables** — time-in-zone is rendered as markdown tables. The `## Heart Rate` section gets an HR-zone table (`From` = each zone's lower bpm bound). For runs, a `## Pace Zones` table shows pace and (when available) GAP side by side; its "Up to" column is each zone's upper pace bound, derived from your threshold pace (intervals.icu stores pace-zone boundaries as percentages of threshold, not absolute speeds), and the open-ended top zone has no bound.
+**Zone tables** — time-in-zone is rendered as markdown tables. The `## Heart Rate` section gets an HR-zone table whose "Up to" column is each zone's upper bpm bound (intervals.icu stores `icu_hr_zones` as the upper limit of each zone; the last entry is HRmax). For runs, a `## Pace Zones` table shows pace and (when available) GAP side by side; its "Up to" column is each zone's upper pace bound, derived from your threshold pace (intervals.icu stores pace-zone boundaries as percentages of threshold, not absolute speeds), and the open-ended top zone has no bound.
 
 **Cadence** — intervals.icu reports single-leg cadence. For runs it is doubled to total steps per minute (`spm`), matching the Garmin/Strava convention; cycling cadence is left as crank RPM.
 
-**Units** — distance, pace, speed, and elevation follow your intervals.icu profile (`measurement_preference` plus per-sport pace units), so notes render in km/mi, min/km or min/mi, km/h or mph, and m/ft to match your account. Temperature is always shown in °C.
+**Units** — distance, pace, speed, elevation, temperature, and wind speed all follow your intervals.icu profile (`measurement_preference`, per-sport pace units, the `fahrenheit` flag, and the `wind_speed` setting), so notes render in km/mi, min/km or min/mi, km/h or mph, m/ft, °C or °F, and km/h · mph · m/s · kn · Bft to match your account.
 
 **Atomic writes** — notes are written to a `.tmp` file and swapped via `os.replace()` to avoid iCloud File Provider locks.
 
-## Weekly load & trend metrics
+## 📊 Weekly load & trend metrics
 
 When wellness data provides usable values, the weekly summary includes a `## Load & trend` section computed deterministically from intervals.icu wellness data — no AI or LLM involved, purely arithmetic.
 
@@ -85,7 +108,7 @@ When wellness data provides usable values, the weekly summary includes a `## Loa
 - Foster C. "Monitoring training in athletes with reference to overtraining syndrome." *Med Sci Sports Exerc* 1998;30(7):1164–1168. — Training monotony and strain.
 - Ramp-rate (5–8 pts/week) and week-over-week load (±30%) bands are **coaching heuristics** from TrainingPeaks / Coggan & Allen's Performance Manager Chart and intervals.icu Fitness/Form documentation (https://intervals.icu), not single controlled studies.
 
-## Project structure
+## 🗂️ Project structure
 
 ```
 src/intervals_sync/
@@ -97,7 +120,7 @@ src/intervals_sync/
   weather.py  — Open-Meteo fetch
 ```
 
-## Development
+## 🛠️ Development
 
 ```bash
 uv run pytest        # tests
@@ -108,6 +131,6 @@ uv run ruff format   # formatting
 
 Pre-commit hooks run format, lint, type check, and tests automatically on `git commit`. CI runs the same checks on Python 3.10 and 3.14 for every push and pull request.
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
