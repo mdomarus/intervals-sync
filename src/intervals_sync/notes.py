@@ -464,7 +464,7 @@ def week_summary(
         "---",
         "",
         f"# 📊 Weekly sport summary — {year}-W{week_num:02d}",
-        f"**Period:** {week_start.strftime('%d.%m')} – {week_end.strftime('%d.%m.%Y')}",
+        f"**Period:** {week_start.strftime('%d.%m')} – {week_end.strftime('%d.%m.%Y')}",  # noqa: RUF001
         "",
         "## Totals",
         "",

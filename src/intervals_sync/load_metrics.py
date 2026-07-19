@@ -25,7 +25,7 @@ def _week_sunday(year: int, week_num: int) -> date:
 def _week_reference_row(
     series: WellnessSeries, year: int, week_num: int
 ) -> WellnessDay | None:
-    """Latest wellness row within the requested ISO week (Mon–Sun), or None.
+    """Latest wellness row within the requested ISO week (Mon-Sun), or None.
 
     Bounded to the week itself so a completely missing week never borrows a
     stale earlier week's CTL/ATL (which would invent a trend row and turn a
@@ -41,7 +41,7 @@ def _week_reference_row(
 
 
 def _week_daily_loads(series: WellnessSeries, year: int, week_num: int) -> list[float]:
-    """Mon–Sun atlLoad values for the week; missing days count as 0.0."""
+    """Mon-Sun atlLoad values for the week; missing days count as 0.0."""
     load_by_day = {row.get("id", ""): (row.get("atlLoad") or 0.0) for row in series}
     daily_loads: list[float] = []
     for iso_weekday in range(1, 8):
@@ -69,7 +69,7 @@ def acwr_label(value: float) -> str:
     if value <= ACWR_OPTIMAL_MAX:
         return "🟢 optimal range"
     if value <= ACWR_ELEVATED_MAX:
-        return "🟠 elevated risk — above sweet-spot (0.8–1.3)"
+        return "🟠 elevated risk — above sweet-spot (0.8-1.3)"
     return "🔴 high injury risk"
 
 
@@ -125,7 +125,7 @@ def week_over_week_label(percent: float) -> str:
 def monotony_and_strain(
     series: WellnessSeries, year: int, week_num: int
 ) -> tuple[float, float] | None:
-    """Foster monotony (mean/pstdev of daily load) and strain (sum × monotony).
+    """Foster monotony (mean/pstdev of daily load) and strain (sum x monotony).
 
     None when daily load has zero spread (all seven days equal, including an
     empty week) — monotony is undefined there."""

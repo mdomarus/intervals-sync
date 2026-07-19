@@ -24,7 +24,7 @@ REQUIRED = {
 def test_loads_from_secrets_file(tmp_path, monkeypatch) -> None:
     secrets_path = tmp_path / "secrets.json"
     secrets_path.write_text(json.dumps({**REQUIRED, "default_lat": 50.0}))
-    monkeypatch.setattr(config, "_find_secrets_file", lambda: str(secrets_path))
+    monkeypatch.setattr(config, "_find_secrets_file", lambda: secrets_path)
 
     settings = config.get_settings()
 
@@ -38,7 +38,7 @@ def test_missing_key_in_secrets_raises_config_error(tmp_path, monkeypatch) -> No
     incomplete = {k: v for k, v in REQUIRED.items() if k != "api_key"}
     secrets_path = tmp_path / "secrets.json"
     secrets_path.write_text(json.dumps(incomplete))
-    monkeypatch.setattr(config, "_find_secrets_file", lambda: str(secrets_path))
+    monkeypatch.setattr(config, "_find_secrets_file", lambda: secrets_path)
 
     with pytest.raises(ConfigError, match="api_key"):
         config.get_settings()
@@ -47,7 +47,7 @@ def test_missing_key_in_secrets_raises_config_error(tmp_path, monkeypatch) -> No
 def test_malformed_json_raises_config_error(tmp_path, monkeypatch) -> None:
     secrets_path = tmp_path / "secrets.json"
     secrets_path.write_text("{not valid json")
-    monkeypatch.setattr(config, "_find_secrets_file", lambda: str(secrets_path))
+    monkeypatch.setattr(config, "_find_secrets_file", lambda: secrets_path)
 
     with pytest.raises(ConfigError, match="Invalid JSON"):
         config.get_settings()

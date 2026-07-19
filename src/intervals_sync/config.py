@@ -1,6 +1,7 @@
 import json
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import TypedDict
 
 
@@ -38,18 +39,18 @@ WEATHER_EXCLUDED_TYPES = ("WeightTraining", "Workout", "VirtualRide", "Swim")
 
 # --- Weekly load-metric thresholds (deterministic interpretation labels) ---
 #
-# ACWR (acute:chronic workload ratio, approximated here as ATL/CTL — the
-# exponentially-weighted variant used by intervals.icu). The 0.8–1.3 "sweet
+# ACWR (acute:chronic workload ratio, approximated here as ATL/CTL - the
+# exponentially-weighted variant used by intervals.icu). The 0.8-1.3 "sweet
 # spot" and elevated-risk bands (>1.3 caution, >1.5 high risk) come from:
-#   Gabbett TJ. "The training—injury prevention paradox: should athletes be
-#   training smarter and harder?" Br J Sports Med 2016;50(5):273–280.
+#   Gabbett TJ. "The training-injury prevention paradox: should athletes be
+#   training smarter and harder?" Br J Sports Med 2016;50(5):273-280.
 #   doi:10.1136/bjsports-2015-095788
 ACWR_UNDERLOAD_MAX = 0.8
 ACWR_OPTIMAL_MAX = 1.3
 ACWR_ELEVATED_MAX = 1.5
 
 # Ramp rate = week-over-week change in CTL (Banister/TRIMP fitness model).
-# "Keep CTL rises to roughly 5–8 points per week" is a widely-used COACHING
+# "Keep CTL rises to roughly 5-8 points per week" is a widely-used COACHING
 # HEURISTIC popularised by TrainingPeaks / Coggan & Allen's Performance
 # Manager Chart — NOT a single controlled study. References: Coggan A, Allen H,
 # "Training and Racing with a Power Meter"; intervals.icu Fitness/Form docs
@@ -65,10 +66,10 @@ LOAD_WOW_JUMP_PCT = 30.0
 LOAD_WOW_DELOAD_PCT = -30.0
 
 # Foster training monotony = weekly mean daily load / population SD of daily
-# load; strain = weekly total load × monotony. Concept and metrics from:
+# load; strain = weekly total load x monotony. Concept and metrics from:
 #   Foster C. "Monitoring training in athletes with reference to overtraining
-#   syndrome." Med Sci Sports Exerc 1998;30(7):1164–1168.
-# The >2.0 elevated-risk / 1.5–2.0 moderate / <1.5 good bands are practical
+#   syndrome." Med Sci Sports Exerc 1998;30(7):1164-1168.
+# The >2.0 elevated-risk / 1.5-2.0 moderate / <1.5 good bands are practical
 # guidance derived from that line of work — treat as rule-of-thumb, not a
 # hard clinical boundary.
 MONOTONY_GOOD_MAX = 1.5
@@ -90,27 +91,27 @@ _ENV_BY_KEY = {
 }
 
 
-def _find_secrets_file() -> str | None:
+def _find_secrets_file() -> Path | None:
     """Locate secrets.json, checking the package directory first and then the
     repo root (two levels up from src/intervals_sync/). Returns None if neither
     exists, in which case settings come from environment variables."""
-    package_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(os.path.dirname(package_dir))
+    package_dir = Path(__file__).resolve().parent
+    repo_root = package_dir.parent.parent
     for candidate in (
-        os.path.join(package_dir, "secrets.json"),
-        os.path.join(repo_root, "secrets.json"),
+        package_dir / "secrets.json",
+        repo_root / "secrets.json",
     ):
-        if os.path.exists(candidate):
+        if candidate.exists():
             return candidate
     return None
 
 
-def _load_from_secrets(secrets_path: str) -> Settings:
+def _load_from_secrets(secrets_path: Path) -> Settings:
     try:
-        with open(secrets_path) as secrets_file:
+        with secrets_path.open() as secrets_file:
             secrets = json.load(secrets_file)
     except json.JSONDecodeError as error:
-        raise ConfigError(f"Invalid JSON in {secrets_path}: {error}") from error
+        raise ConfigError(f"Invalid JSON in {secrets_path!s}: {error}") from error
     missing_keys = [key for key in _ENV_BY_KEY if not secrets.get(key)]
     if missing_keys:
         raise ConfigError(
