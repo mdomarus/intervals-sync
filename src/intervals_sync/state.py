@@ -62,6 +62,12 @@ class Activity(TypedDict, total=False):
     average_speed: float
     max_speed: float
     use_elevation_correction: bool
+    gap: float
+    gap_model: str
+    threshold_pace: float
+    pace_zones: list[float]
+    pace_zone_times: list[int]
+    gap_zone_times: list[int]
 
 
 class WellnessDay(TypedDict, total=False):
