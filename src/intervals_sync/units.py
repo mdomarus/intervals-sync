@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -102,7 +103,7 @@ class UnitPreferences:
         return PaceUnit.MINS_KM
 
     @classmethod
-    def from_athlete(cls, profile: dict[str, Any] | None) -> "UnitPreferences":
+    def from_athlete(cls, profile: Mapping[str, Any] | None) -> "UnitPreferences":
         if not profile:
             return cls(UnitSystem.METRIC, {})
         raw_preference = str(profile.get("measurement_preference", "")).upper()
