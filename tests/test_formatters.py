@@ -2,9 +2,10 @@ from typing import Any
 
 from intervals_sync.formatters import (
     format_duration,
+    format_zone_time,
     hr_zones_summary,
     iso_year_week,
-    pace_zones_summary,
+    pace_zones_table,
     sanitize_filename,
     splits_table,
 )
@@ -53,33 +54,109 @@ class TestSanitizeFilename:
         assert sanitize_filename("🏔️") == "🏔_"
 
 
-class TestPaceZonesSummary:
-    def test_returns_none_without_data(self) -> None:
-        assert pace_zones_summary(None, None, PaceUnit.MINS_KM) is None
-        assert pace_zones_summary([], [], PaceUnit.MINS_KM) is None
+class TestFormatZoneTime:
+    def test_formats_sub_minute_without_dropping_seconds(self) -> None:
+        # Regression: 55s used to render as "0min"; it must keep the seconds.
+        assert format_zone_time(55) == "0:55"
 
-    def test_returns_none_when_all_zero(self) -> None:
-        assert pace_zones_summary([0, 0, 0], [3.0, 3.5, 4.0], PaceUnit.MINS_KM) is None
+    def test_formats_minutes_and_seconds(self) -> None:
+        assert format_zone_time(1771) == "29:31"
 
-    def test_formats_zones_with_limits(self) -> None:
-        # Z1: 3.0 m/s → 1000/3.0 s/km = 333s → 5:33 /km
-        # Z2: 3.5 m/s → 1000/3.5 s/km ≈ 286s → 4:46 /km
-        result = pace_zones_summary([600, 1800], [3.0, 3.5], PaceUnit.MINS_KM)
-        assert result == "Z1 (<5:33 /km): 10min (25%) | Z2 (<4:46 /km): 30min (75%)"
+    def test_pads_seconds(self) -> None:
+        assert format_zone_time(65) == "1:05"
 
-    def test_formats_zones_in_miles(self) -> None:
-        # 3.0 m/s → 1609.344/3.0 = 536.4 s/mi → 8:56 /mi
-        # 3.5 m/s → 1609.344/3.5 = 459.8 s/mi → 7:40 /mi
-        result = pace_zones_summary([600, 1800], [3.0, 3.5], PaceUnit.MINS_MILE)
-        assert result == "Z1 (<8:56 /mi): 10min (25%) | Z2 (<7:40 /mi): 30min (75%)"
+    def test_formats_hours_when_over_an_hour(self) -> None:
+        assert format_zone_time(3900) == "1:05:00"
 
-    def test_formats_zones_without_limits(self) -> None:
-        result = pace_zones_summary([600, 1800], None, PaceUnit.MINS_KM)
-        assert result == "Z1: 10min (25%) | Z2: 30min (75%)"
 
-    def test_skips_zero_time_zones(self) -> None:
-        result = pace_zones_summary([0, 1800, 600], [3.0, 3.5, 4.0], PaceUnit.MINS_KM)
-        assert result == "Z2 (<4:46 /km): 30min (75%) | Z3 (<4:10 /km): 10min (25%)"
+class TestPaceZonesTable:
+    # intervals.icu `pace_zones` are percentages of the athlete's threshold pace
+    # (100% == threshold), not absolute speeds. threshold_pace is m/s.
+    THRESHOLD_MPS = 3.5335689  # ≈ 4:43 /km, a real intervals.icu run value
+
+    def test_returns_empty_without_data(self) -> None:
+        assert (
+            pace_zones_table(None, None, None, self.THRESHOLD_MPS, PaceUnit.MINS_KM)
+            == []
+        )
+        assert pace_zones_table([], [], [], self.THRESHOLD_MPS, PaceUnit.MINS_KM) == []
+
+    def test_returns_empty_when_all_zero(self) -> None:
+        assert (
+            pace_zones_table(
+                [0, 0], [0, 0], [77.5, 100.0], self.THRESHOLD_MPS, PaceUnit.MINS_KM
+            )
+            == []
+        )
+
+    def test_builds_combined_pace_and_gap_table(self) -> None:
+        # 77.5% of 3.5335689 m/s = 2.739 m/s → 6:05 /km; 100.0% → 4:43 /km.
+        table = pace_zones_table(
+            [600, 1800],
+            [1200, 1200],
+            [77.5, 100.0],
+            self.THRESHOLD_MPS,
+            PaceUnit.MINS_KM,
+        )
+        assert table == [
+            "| Zone | Up to | Pace time | Pace % | GAP time | GAP % |",
+            "|:-----|-----:|----------:|-------:|---------:|------:|",
+            "| Z1 | 6:05 /km | 10:00 | 25% | 20:00 | 50% |",
+            "| Z2 | 4:43 /km | 30:00 | 75% | 20:00 | 50% |",
+        ]
+
+    def test_open_top_zone_has_no_threshold(self) -> None:
+        # 999.0 is intervals.icu's open-ended top-zone sentinel: no upper pace bound.
+        table = pace_zones_table(
+            [600, 1800],
+            [600, 1800],
+            [100.0, 999.0],
+            self.THRESHOLD_MPS,
+            PaceUnit.MINS_KM,
+        )
+        assert table[3] == "| Z2 | — | 30:00 | 75% | 30:00 | 75% |"
+
+    def test_skips_zones_with_no_time_in_either_series(self) -> None:
+        table = pace_zones_table(
+            [0, 1800, 600],
+            [0, 1200, 1200],
+            [77.5, 94.3, 100.0],
+            self.THRESHOLD_MPS,
+            PaceUnit.MINS_KM,
+        )
+        rows = [row for row in table if row.startswith(("| Z1", "| Z2", "| Z3"))]
+        assert rows == [
+            "| Z2 | 5:00 /km | 30:00 | 75% | 20:00 | 50% |",
+            "| Z3 | 4:43 /km | 10:00 | 25% | 20:00 | 50% |",
+        ]
+
+    def test_renders_dash_for_zero_time_in_one_series(self) -> None:
+        table = pace_zones_table(
+            [600, 0],
+            [0, 1800],
+            [77.5, 100.0],
+            self.THRESHOLD_MPS,
+            PaceUnit.MINS_KM,
+        )
+        assert table[2] == "| Z1 | 6:05 /km | 10:00 | 100% | — | — |"
+        assert table[3] == "| Z2 | 4:43 /km | — | — | 30:00 | 100% |"
+
+    def test_omits_gap_columns_when_gap_absent(self) -> None:
+        table = pace_zones_table(
+            [600, 1800], None, [77.5, 100.0], self.THRESHOLD_MPS, PaceUnit.MINS_KM
+        )
+        assert table == [
+            "| Zone | Up to | Pace time | Pace % |",
+            "|:-----|-----:|----------:|-------:|",
+            "| Z1 | 6:05 /km | 10:00 | 25% |",
+            "| Z2 | 4:43 /km | 30:00 | 75% |",
+        ]
+
+    def test_no_threshold_column_values_without_threshold(self) -> None:
+        table = pace_zones_table(
+            [600, 1800], None, [77.5, 100.0], None, PaceUnit.MINS_KM
+        )
+        assert table[2] == "| Z1 | — | 10:00 | 25% |"
 
 
 class TestHrZonesSummary:
