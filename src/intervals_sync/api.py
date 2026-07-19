@@ -6,7 +6,7 @@ import urllib.request
 from typing import Any, cast
 
 from .config import HTTP_TIMEOUT_SECONDS, INTERVALS_API_URL, get_settings
-from .state import Activity, WellnessSeries
+from .state import Activity, Athlete, WellnessSeries
 
 
 def get_headers() -> dict[str, str]:
@@ -44,6 +44,24 @@ def get_activity(act_id: str) -> Activity | None:
         json.JSONDecodeError,
     ) as e:
         print(f"  ⚠️  activity refetch failed for {act_id}: {e}")
+        return None
+
+
+def get_athlete() -> Athlete | None:
+    """Fetch the athlete profile (measurement_preference + sportSettings) used to
+    resolve display units. Returns None on network/parse failure so the caller
+    falls back to metric instead of aborting the sync."""
+    athlete_id = get_settings()["athlete_id"]
+    try:
+        return cast(
+            Athlete, _request("GET", f"{INTERVALS_API_URL}/athlete/{athlete_id}")
+        )
+    except (
+        urllib.error.URLError,
+        http.client.IncompleteRead,
+        json.JSONDecodeError,
+    ) as athlete_error:
+        print(f"  ⚠️  athlete profile fetch failed, using metric: {athlete_error}")
         return None
 
 

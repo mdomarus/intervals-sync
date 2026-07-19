@@ -4,6 +4,13 @@ from datetime import datetime
 from typing import Any
 
 from .config import RUN_TYPES
+from .units import (
+    PaceUnit,
+    UnitPreferences,
+    format_distance,
+    format_pace,
+    format_speed,
+)
 
 
 def iso_year_week(date_str: str) -> tuple[int, int]:
@@ -24,20 +31,6 @@ def format_duration(total_seconds: int | float | None) -> str:
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{seconds:02d}"
-
-
-def format_pace(dist_m: float | None, time_s: float | None) -> str | None:
-    if not dist_m or not time_s:
-        return None
-    pace_secs_per_km = time_s / (dist_m / 1000)
-    minutes, seconds = divmod(round(pace_secs_per_km), 60)
-    return f"{minutes}:{seconds:02d} /km"
-
-
-def mps_to_kmh(mps: float | None) -> float | None:
-    if mps is None:
-        return None
-    return round(mps * 3.6, 1)
 
 
 def activity_emoji(activity_type: str) -> str:
@@ -100,6 +93,7 @@ def hr_zones_summary(
 def pace_zones_summary(
     zone_times: list[int] | None,
     zone_limits: list[float] | None,
+    pace_unit: PaceUnit,
 ) -> str | None:
     if not zone_times:
         return None
@@ -118,7 +112,9 @@ def pace_zones_summary(
             and zone_limits[zone_idx] is not None
             and zone_limits[zone_idx] != 0.0
         ):
-            threshold_str = format_pace(1000, 1000 / zone_limits[zone_idx]) or "?"
+            threshold_str = (
+                format_pace(1000, 1000 / zone_limits[zone_idx], pace_unit) or "?"
+            )
             label = f"Z{zone_idx + 1} (<{threshold_str})"
         else:
             label = f"Z{zone_idx + 1}"
@@ -127,7 +123,9 @@ def pace_zones_summary(
 
 
 def splits_table(
-    intervals_data: dict[str, Any] | None, activity_type: str
+    intervals_data: dict[str, Any] | None,
+    activity_type: str,
+    prefs: UnitPreferences,
 ) -> list[str]:
     """Build a splits table from the /intervals response."""
     if not intervals_data:
@@ -136,6 +134,7 @@ def splits_table(
     if not raw_intervals:
         return []
     is_run = activity_type in RUN_TYPES
+    pace_unit = prefs.pace_unit_for(activity_type)
     lines: list[str] = ["", "## Splits (intervals.icu)", ""]
     if is_run:
         hdr = (
@@ -168,16 +167,15 @@ def splits_table(
         intensity = (
             f"{int(interval['intensity'])}%" if interval.get("intensity") else "—"
         )
-        dist_str = f"{dist / 1000:.2f} km" if dist else "—"
+        dist_str = format_distance(dist, prefs.system) or "—"
         time_str = format_duration(moving_time) if moving_time else "—"
         if is_run:
-            pace_str = format_pace(dist, moving_time) or "—"
+            pace_str = format_pace(dist, moving_time, pace_unit) or "—"
             gap_mps = interval.get("gap")
-            gap_str = format_pace(1000, 1000 / gap_mps) if gap_mps else "—"
+            gap_str = format_pace(1000, 1000 / gap_mps, pace_unit) if gap_mps else "—"
             table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {pace_str} | {gap_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
         else:
-            speed = mps_to_kmh(interval.get("average_speed"))
-            speed_str = f"{speed} km/h" if speed else "—"
+            speed_str = format_speed(interval.get("average_speed"), prefs.system) or "—"
             table_row = f"| {idx} | {type_label} | {dist_str} | {time_str} | {speed_str} | {hr_avg} | {hr_max} | Z{zone} | {intensity} |"
         lines.append(table_row)
     return lines
