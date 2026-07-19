@@ -34,6 +34,9 @@ WEATHER_MAX_PAST_DAYS = 92
 
 # Distance/pace-based run types (get a Pace row and a run-shaped splits table).
 RUN_TYPES = ("Run", "TrailRun")
+# intervals.icu marks the open-ended top pace zone with this percentage-of-threshold
+# sentinel; it has no meaningful upper pace bound and renders without a threshold.
+OPEN_PACE_ZONE_SENTINEL = 999.0
 # Indoor / GPS-less types that never get a weather lookup.
 WEATHER_EXCLUDED_TYPES = ("WeightTraining", "Workout", "VirtualRide", "Swim")
 
