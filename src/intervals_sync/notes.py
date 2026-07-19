@@ -98,11 +98,19 @@ def activity_note(
 
     pace_str = format_pace(dist_m, moving) if activity_type in RUN_TYPES else None
     gap_mps = get_field(activity, "gap") if activity_type in RUN_TYPES else None
-    gap_str = format_pace(1000, 1000 / gap_mps) if gap_mps else None
+    gap_str = (
+        format_pace(1000, 1000 / gap_mps)
+        if gap_mps is not None and gap_mps != 0.0
+        else None
+    )
     threshold_mps = (
         get_field(activity, "threshold_pace") if activity_type in RUN_TYPES else None
     )
-    threshold_str = format_pace(1000, 1000 / threshold_mps) if threshold_mps else None
+    threshold_str = (
+        format_pace(1000, 1000 / threshold_mps)
+        if threshold_mps is not None and threshold_mps != 0.0
+        else None
+    )
     speed_str = mps_to_kmh(get_field(activity, "average_speed"))
     max_speed_str = mps_to_kmh(get_field(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)

@@ -112,13 +112,18 @@ def pace_zones_summary(
             continue
         pct = round(zone_time / total * 100)
         mins = zone_time // 60
-        if zone_limits and zone_idx < len(zone_limits) and zone_limits[zone_idx]:
+        if (
+            zone_limits
+            and zone_idx < len(zone_limits)
+            and zone_limits[zone_idx] is not None
+            and zone_limits[zone_idx] != 0.0
+        ):
             threshold_str = format_pace(1000, 1000 / zone_limits[zone_idx]) or "?"
             label = f"Z{zone_idx + 1} (<{threshold_str})"
         else:
             label = f"Z{zone_idx + 1}"
         parts.append(f"{label}: {mins}min ({pct}%)")
-    return " | ".join(parts) if parts else None
+    return " | ".join(parts)
 
 
 def splits_table(
