@@ -17,11 +17,25 @@ from .load_metrics import load_section_lines
 from .state import Activity, WellnessSeries
 from .units import (
     UnitPreferences,
+    UnitSystem,
     format_distance,
     format_elevation,
     format_pace,
     format_speed,
 )
+
+
+def _distance_or_zero(dist_m: float, system: UnitSystem) -> str:
+    """Distance string that renders zero as '0.00 mi' or '0.00 km' instead of vanishing.
+
+    `format_distance` returns None for zero/absent distance (to suppress the row
+    in activity notes). Weekly summaries always need a printed value, even for
+    zero-distance activities — and that value must respect the active unit system.
+    """
+    formatted = format_distance(dist_m, system)
+    if formatted is not None:
+        return formatted
+    return "0.00 mi" if system is UnitSystem.IMPERIAL else "0.00 km"
 
 
 def activity_note(
@@ -455,7 +469,7 @@ def week_summary(
         "## Totals",
         "",
         f"- **Activities:** {len(week_acts)}",
-        f"- **Distance:** {format_distance(total_dist_m, prefs.system) or '0.00 km'}",
+        f"- **Distance:** {_distance_or_zero(total_dist_m, prefs.system)}",
         f"- **Time:** {format_duration(total_time)}",
         f"- **Elevation:** {format_elevation(total_elev, prefs.system)}",
     ]
@@ -479,7 +493,7 @@ def week_summary(
     for activity_type, stats in sorted(by_type.items()):
         lines.append(
             f"- {activity_emoji(activity_type)} **{activity_type}** — {stats['count']}x, "
-            f"{format_distance(stats['dist_m'], prefs.system) or '0.00 km'}, "
+            f"{_distance_or_zero(stats['dist_m'], prefs.system)}, "
             f"{format_duration(stats['time'])}, "
             f"{format_elevation(stats['elev'], prefs.system)}"
         )
@@ -489,13 +503,12 @@ def week_summary(
         act_emoji = activity_emoji(activity.get("type", ""))
         name = activity.get("name", "Activity")
         date_str = activity.get("start_date_local", "")[:10]
-        dist_str = format_distance(activity.get("distance", 0) or 0, prefs.system)
         training_load = activity.get("icu_training_load")
         load_str = f" | Load: {round(training_load, 1)}" if training_load else ""
         sanitized_note_name = sanitize_filename(name)
         lines.append(
             f"- {act_emoji} [[{date_str} {sanitized_note_name}]] — "
-            f"{dist_str or '0.00 km'}{load_str}"
+            f"{_distance_or_zero(activity.get('distance', 0) or 0, prefs.system)}{load_str}"
         )
 
     return "\n".join(lines)

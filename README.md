@@ -61,6 +61,8 @@ Generates a launchd plist from the current environment (`$HOME`, `uv` path, repo
 
 **Splits** — structured WORK/RECOVERY interval data from intervals.icu is rendered as a markdown table.
 
+**Units** — distance, pace, speed, and elevation follow your intervals.icu profile (`measurement_preference` plus per-sport pace units), so notes render in km/mi, min/km or min/mi, km/h or mph, and m/ft to match your account. Temperature is always shown in °C.
+
 **Atomic writes** — notes are written to a `.tmp` file and swapped via `os.replace()` to avoid iCloud File Provider locks.
 
 ## Weekly load & trend metrics

@@ -1,6 +1,6 @@
 from typing import Any, cast
 
-from intervals_sync.notes import activity_note, week_summary
+from intervals_sync.notes import _distance_or_zero, activity_note, week_summary
 from intervals_sync.state import Activity, WellnessSeries
 from intervals_sync.units import PaceUnit, UnitPreferences, UnitSystem
 
@@ -185,3 +185,71 @@ class TestActivityNoteImperial:
         assert "/mi" in note
         assert "394 ft" in note  # 120 m
         assert "°C" in note or "Conditions" not in note  # temp stays Celsius
+
+
+class TestDistanceOrZeroHelper:
+    """Unit tests for the _distance_or_zero helper for both unit systems."""
+
+    def test_nonzero_metric_returns_km_string(self) -> None:
+        assert _distance_or_zero(10000.0, UnitSystem.METRIC) == "10.00 km"
+
+    def test_nonzero_imperial_returns_miles_string(self) -> None:
+        result = _distance_or_zero(10000.0, UnitSystem.IMPERIAL)
+        assert result == "6.21 mi"
+
+    def test_zero_metric_returns_zero_km(self) -> None:
+        assert _distance_or_zero(0.0, UnitSystem.METRIC) == "0.00 km"
+
+    def test_zero_imperial_returns_zero_miles(self) -> None:
+        assert _distance_or_zero(0.0, UnitSystem.IMPERIAL) == "0.00 mi"
+
+
+class TestWeekSummaryImperialZeroDistance:
+    """Imperial week_summary with a zero-distance activity renders '0.00 mi', not '0.00 km'."""
+
+    def _weight_training_activity(self) -> Activity:
+        """WeightTraining activity with no distance — triggers the zero-distance path."""
+        return cast(
+            Activity,
+            {
+                "id": 42,
+                "type": "WeightTraining",
+                "name": "Strength",
+                "start_date_local": "2026-07-15T09:00:00",
+                "distance": 0,
+                "moving_time": 3600,
+                "icu_training_load": 40,
+            },
+        )
+
+    def test_totals_distance_uses_imperial_zero(self) -> None:
+        imperial_prefs = UnitPreferences(UnitSystem.IMPERIAL, {})
+        summary = week_summary(
+            [self._weight_training_activity()], 2026, 29, imperial_prefs
+        )
+        assert summary is not None
+        assert "0.00 mi" in summary
+        assert "0.00 km" not in summary
+
+    def test_by_type_distance_uses_imperial_zero(self) -> None:
+        imperial_prefs = UnitPreferences(UnitSystem.IMPERIAL, {})
+        summary = week_summary(
+            [self._weight_training_activity()], 2026, 29, imperial_prefs
+        )
+        assert summary is not None
+        # The "By type" line for WeightTraining should also use miles
+        by_type_section_start = summary.index("## By type")
+        by_type_section = summary[by_type_section_start:]
+        assert "0.00 mi" in by_type_section
+        assert "0.00 km" not in by_type_section
+
+    def test_activities_list_uses_imperial_zero(self) -> None:
+        imperial_prefs = UnitPreferences(UnitSystem.IMPERIAL, {})
+        summary = week_summary(
+            [self._weight_training_activity()], 2026, 29, imperial_prefs
+        )
+        assert summary is not None
+        activities_section_start = summary.index("## Activities")
+        activities_section = summary[activities_section_start:]
+        assert "0.00 mi" in activities_section
+        assert "0.00 km" not in activities_section
