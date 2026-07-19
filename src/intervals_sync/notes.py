@@ -11,6 +11,7 @@ from .formatters import (
     hr_zones_summary,
     iso_year_week,
     mps_to_kmh,
+    pace_zones_summary,
     sanitize_filename,
     splits_table,
 )
@@ -96,9 +97,35 @@ def activity_note(
         tag_list += tags
 
     pace_str = format_pace(dist_m, moving) if activity_type in RUN_TYPES else None
+    gap_mps = get_field(activity, "gap") if activity_type in RUN_TYPES else None
+    gap_str = (
+        format_pace(1000, 1000 / gap_mps)
+        if gap_mps is not None and gap_mps != 0.0
+        else None
+    )
+    threshold_mps = (
+        get_field(activity, "threshold_pace") if activity_type in RUN_TYPES else None
+    )
+    threshold_str = (
+        format_pace(1000, 1000 / threshold_mps)
+        if threshold_mps is not None and threshold_mps != 0.0
+        else None
+    )
     speed_str = mps_to_kmh(get_field(activity, "average_speed"))
     max_speed_str = mps_to_kmh(get_field(activity, "max_speed"))
     zones_str = hr_zones_summary(zone_times, zone_limits)
+
+    pace_zone_times = (
+        get_field(activity, "pace_zone_times") if activity_type in RUN_TYPES else None
+    )
+    gap_zone_times = (
+        get_field(activity, "gap_zone_times") if activity_type in RUN_TYPES else None
+    )
+    pace_zone_limits = (
+        get_field(activity, "pace_zones") if activity_type in RUN_TYPES else None
+    )
+    pace_zones_str = pace_zones_summary(pace_zone_times, pace_zone_limits)
+    gap_zones_str = pace_zones_summary(gap_zone_times, pace_zone_limits)
 
     lines = [
         "---",
@@ -137,6 +164,8 @@ def activity_note(
                     format_duration(elapsed) if elapsed and elapsed != moving else None,
                 ),
                 format_markdown_row("Pace", pace_str),
+                format_markdown_row("GAP", gap_str),
+                format_markdown_row("Threshold", threshold_str),
                 format_markdown_row("Speed avg", speed_str, "km/h"),
                 format_markdown_row("Speed max", max_speed_str, "km/h"),
                 format_markdown_row(
@@ -175,6 +204,13 @@ def activity_note(
         )
         if zones_str:
             lines.append(f"- **HR Zones:** {zones_str}  ")
+
+    if pace_zones_str or gap_zones_str:
+        lines += ["", "## Pace Zones", ""]
+        if pace_zones_str:
+            lines.append(f"- **Pace Zones:** {pace_zones_str}  ")
+        if gap_zones_str:
+            lines.append(f"- **GAP Zones:** {gap_zones_str}  ")
 
     if power_avg or power_weighted:
         lines += ["", "## Power", ""]

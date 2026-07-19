@@ -30,7 +30,7 @@ def format_pace(dist_m: float | None, time_s: float | None) -> str | None:
     if not dist_m or not time_s:
         return None
     pace_secs_per_km = time_s / (dist_m / 1000)
-    minutes, seconds = divmod(int(pace_secs_per_km), 60)
+    minutes, seconds = divmod(round(pace_secs_per_km), 60)
     return f"{minutes}:{seconds:02d} /km"
 
 
@@ -94,6 +94,35 @@ def hr_zones_summary(
             pct = round(zone_time / total * 100)
             mins = zone_time // 60
             parts.append(f"Z{zone_idx + 1} ({zone_limit}+bpm): {mins}min ({pct}%)")
+    return " | ".join(parts)
+
+
+def pace_zones_summary(
+    zone_times: list[int] | None,
+    zone_limits: list[float] | None,
+) -> str | None:
+    if not zone_times:
+        return None
+    total = sum(zone_times)
+    if total == 0:
+        return None
+    parts = []
+    for zone_idx, zone_time in enumerate(zone_times):
+        if zone_time == 0:
+            continue
+        pct = round(zone_time / total * 100)
+        mins = zone_time // 60
+        if (
+            zone_limits
+            and zone_idx < len(zone_limits)
+            and zone_limits[zone_idx] is not None
+            and zone_limits[zone_idx] != 0.0
+        ):
+            threshold_str = format_pace(1000, 1000 / zone_limits[zone_idx]) or "?"
+            label = f"Z{zone_idx + 1} (<{threshold_str})"
+        else:
+            label = f"Z{zone_idx + 1}"
+        parts.append(f"{label}: {mins}min ({pct}%)")
     return " | ".join(parts)
 
 
