@@ -1,8 +1,8 @@
 import json
-import os
+from pathlib import Path
 from typing import Any, TypedDict
 
-STATE_FILE = os.path.expanduser("~/.intervals_sync_state.json")
+STATE_FILE = Path("~/.intervals_sync_state.json").expanduser()
 
 
 class Activity(TypedDict, total=False):
@@ -97,15 +97,15 @@ class State(TypedDict):
 
 
 def load_state() -> State:
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
+    if STATE_FILE.exists():
+        with STATE_FILE.open() as f:
             try:
                 return json.load(f)
             except json.JSONDecodeError as e:
-                raise RuntimeError(f"Corrupt state file {STATE_FILE}: {e}") from e
+                raise RuntimeError(f"Corrupt state file {STATE_FILE!s}: {e}") from e
     return {"last_sync": None}
 
 
 def save_state(state: State) -> None:
-    with open(STATE_FILE, "w") as f:
+    with STATE_FILE.open("w") as f:
         json.dump(state, f, indent=2)

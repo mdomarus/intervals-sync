@@ -1,10 +1,10 @@
-import glob
 import os
 import re
 import sys
 import time
 import urllib.error
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import cast
 
 from .api import (
@@ -40,26 +40,26 @@ def write_text_safe(
     cause of 07:00 failures. Retries on transient OSError. Returns True/False
     (False = failed to save; caller decides whether to continue).
     """
-    parent_dir = os.path.dirname(path)
-    os.makedirs(parent_dir, exist_ok=True)
-    tmp = os.path.join(parent_dir, f".{os.path.basename(path)}.tmp.{os.getpid()}")
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = file_path.parent / f".{file_path.name}.tmp.{os.getpid()}"
     last_error: OSError | None = None
     for attempt in range(retries):
         try:
-            with open(tmp, "w") as f:
+            with tmp.open("w") as f:
                 f.write(content)
-            os.replace(tmp, path)
+            tmp.replace(file_path)
             return True
         except OSError as e:
             last_error = e
             try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
+                if tmp.exists():
+                    tmp.unlink()
             except OSError:
                 pass
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
-    print(f"  ⚠️  failed to save {os.path.basename(path)}: {last_error}")
+    print(f"  ⚠️  failed to save {file_path.name}: {last_error}")
     return False
 
 
@@ -70,15 +70,14 @@ def scan_existing_notes(activities_dir: str) -> dict[str, str]:
     the ID lives in the note itself (activity_id:), so we don't rely on an
     external state file that may drift or be unaware of pre-tracking notes."""
     existing_notes: dict[str, str] = {}
-    for note_path in glob.glob(f"{activities_dir}/**/*.md", recursive=True):
+    for note_path in Path(activities_dir).rglob("*.md"):
         try:
-            with open(note_path) as f:
-                head = f.read(800)
+            head = note_path.read_text(errors="replace")[:800]
         except OSError:
             continue
         match = re.search(r"(?m)^activity_id:\s*(\S+)\s*$", head)
         if match:
-            existing_notes[match.group(1)] = os.path.relpath(note_path, activities_dir)
+            existing_notes[match.group(1)] = str(note_path.relative_to(activities_dir))
     return existing_notes
 
 
@@ -125,26 +124,27 @@ def sync(force: bool = False) -> None:
         prefix = f"{subdir}/" if subdir else ""
         relpath = f"{prefix}{start} {sanitize_filename(name)}.md"
         # Collision: a different activity (different ID) already claimed this name →
-        # append ID to avoid overwriting (e.g. 2× "Gdansk Road Cycling" same day).
+        # append ID to avoid overwriting (e.g. 2x "Gdansk Road Cycling" same day).
         owner = claimed.get(relpath)
         if owner is not None and owner != act_id:
             relpath = f"{prefix}{start} {sanitize_filename(name)}__{activity.get('strava_id') or act_id}.md"
         filepath = f"{activities_dir}/{relpath}"
 
         # Note with this ID already exists at this path → skip (unless --force).
-        if not force and id_to_path.get(act_id) == relpath and os.path.exists(filepath):
+        if not force and id_to_path.get(act_id) == relpath and Path(filepath).exists():
             claimed[relpath] = act_id
             continue
 
         # Disable elevation correction (DEM) — use device barometer, consistent
         # with Strava/Garmin. total_elevation_gain is recalculated server-side,
         # so we re-fetch the activity after the PUT.
-        if activity.get("use_elevation_correction"):
-            if set_elevation_correction(act_id, False):
-                time.sleep(2.5)
-                fresh = get_activity(act_id)
-                if fresh and fresh.get("total_elevation_gain") is not None:
-                    activity = fresh
+        if activity.get("use_elevation_correction") and set_elevation_correction(
+            act_id, False
+        ):
+            time.sleep(2.5)
+            fresh = get_activity(act_id)
+            if fresh and fresh.get("total_elevation_gain") is not None:
+                activity = fresh
 
         intervals_data = fetch_intervals(act_id)
         weather = None
@@ -162,10 +162,10 @@ def sync(force: bool = False) -> None:
         # Rename: same ID was previously at a different path → delete old note.
         old_rel = id_to_path.get(act_id)
         if old_rel and old_rel != relpath:
-            old_path = f"{activities_dir}/{old_rel}"
-            if os.path.exists(old_path):
+            old_path = Path(activities_dir) / old_rel
+            if old_path.exists():
                 try:
-                    os.remove(old_path)
+                    old_path.unlink()
                     print(f"  🗑  removed old note: {old_rel}")
                 except OSError:
                     pass
