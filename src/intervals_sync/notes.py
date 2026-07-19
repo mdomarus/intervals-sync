@@ -9,7 +9,7 @@ from .formatters import (
     get_field,
     hr_zones_summary,
     iso_year_week,
-    pace_zones_summary,
+    pace_zones_table,
     sanitize_filename,
     splits_table,
 )
@@ -146,8 +146,9 @@ def activity_note(
     pace_zone_limits = (
         get_field(activity, "pace_zones") if activity_type in RUN_TYPES else None
     )
-    pace_zones_str = pace_zones_summary(pace_zone_times, pace_zone_limits, pace_unit)
-    gap_zones_str = pace_zones_summary(gap_zone_times, pace_zone_limits, pace_unit)
+    pace_zone_rows = pace_zones_table(
+        pace_zone_times, gap_zone_times, pace_zone_limits, threshold_mps, pace_unit
+    )
 
     lines = [
         "---",
@@ -231,12 +232,9 @@ def activity_note(
         if zones_str:
             lines.append(f"- **HR Zones:** {zones_str}  ")
 
-    if pace_zones_str or gap_zones_str:
+    if pace_zone_rows:
         lines += ["", "## Pace Zones", ""]
-        if pace_zones_str:
-            lines.append(f"- **Pace Zones:** {pace_zones_str}  ")
-        if gap_zones_str:
-            lines.append(f"- **GAP Zones:** {gap_zones_str}  ")
+        lines += pace_zone_rows
 
     if power_avg or power_weighted:
         lines += ["", "## Power", ""]

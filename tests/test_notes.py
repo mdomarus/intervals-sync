@@ -97,9 +97,9 @@ class TestActivityNotePaceZones:
             _METRIC,
         )
         assert "## Pace Zones" in note
-        assert "**Pace Zones:**" in note
+        assert "| Zone | Up to | Pace time | Pace % |" in note
 
-    def test_gap_zones_line_present_when_gap_zone_times_available(self) -> None:
+    def test_gap_columns_present_when_gap_zone_times_available(self) -> None:
         note = activity_note(
             _minimal_activity(
                 type="Run",
@@ -109,9 +109,9 @@ class TestActivityNotePaceZones:
             ),
             _METRIC,
         )
-        assert "**GAP Zones:**" in note
+        assert "| GAP time | GAP % |" in note
 
-    def test_gap_zones_line_absent_without_gap_zone_times(self) -> None:
+    def test_gap_columns_absent_without_gap_zone_times(self) -> None:
         note = activity_note(
             _minimal_activity(
                 type="Run",
@@ -120,7 +120,7 @@ class TestActivityNotePaceZones:
             ),
             _METRIC,
         )
-        assert "**GAP Zones:**" not in note
+        assert "| GAP time | GAP % |" not in note
 
     def test_pace_zones_section_absent_for_non_run(self) -> None:
         note = activity_note(

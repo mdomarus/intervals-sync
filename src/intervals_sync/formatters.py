@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from .config import RUN_TYPES
+from .config import OPEN_PACE_ZONE_SENTINEL, RUN_TYPES
 from .units import (
     PaceUnit,
     UnitPreferences,
@@ -90,36 +90,108 @@ def hr_zones_summary(
     return " | ".join(parts)
 
 
-def pace_zones_summary(
-    zone_times: list[int] | None,
+def format_zone_time(seconds: int) -> str:
+    """Render a time-in-zone duration as M:SS (or H:MM:SS past an hour).
+
+    Unlike a bare `seconds // 60`, this keeps the seconds so sub-minute zones read
+    as "0:55" rather than the misleading "0min".
+    """
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def pace_zones_table(
+    pace_zone_times: list[int] | None,
+    gap_zone_times: list[int] | None,
     zone_limits: list[float] | None,
+    threshold_mps: float | None,
+    pace_unit: PaceUnit,
+) -> list[str]:
+    """Build a markdown table of time-in-zone for pace and (optionally) GAP zones.
+
+    intervals.icu `pace_zones` are the upper bound of each zone expressed as a
+    percentage of the athlete's threshold pace (100% == threshold), not absolute
+    speeds. The threshold itself (`threshold_mps`) is a speed in m/s, so the zone's
+    upper pace bound is `threshold_mps * percent / 100`.
+
+    Pace and GAP share the same zone bounds, so they render as one table with an
+    "Up to" threshold column plus time/percent columns per series. The GAP columns
+    are omitted entirely when no GAP data is present. Returns [] when there is no
+    time in any zone.
+    """
+    if not pace_zone_times and not gap_zone_times:
+        return []
+    has_gap = bool(gap_zone_times)
+    pace_total = sum(pace_zone_times or [])
+    gap_total = sum(gap_zone_times or [])
+    if pace_total == 0 and gap_total == 0:
+        return []
+
+    header = ["Zone", "Up to", "Pace time", "Pace %"]
+    alignment = [":-----", "-----:", "----------:", "-------:"]
+    if has_gap:
+        header += ["GAP time", "GAP %"]
+        alignment += ["---------:", "------:"]
+    rows = [f"| {' | '.join(header)} |", f"|{'|'.join(alignment)}|"]
+
+    zone_count = max(len(pace_zone_times or []), len(gap_zone_times or []))
+    for zone_idx in range(zone_count):
+        pace_time = _zone_value(pace_zone_times, zone_idx)
+        gap_time = _zone_value(gap_zone_times, zone_idx)
+        if pace_time == 0 and gap_time == 0:
+            continue
+        threshold_str = (
+            _pace_zone_threshold(zone_limits, zone_idx, threshold_mps, pace_unit) or "—"
+        )
+        cells = [
+            f"Z{zone_idx + 1}",
+            threshold_str,
+            *_time_and_percent(pace_time, pace_total),
+        ]
+        if has_gap:
+            cells += _time_and_percent(gap_time, gap_total)
+        rows.append(f"| {' | '.join(cells)} |")
+    return rows
+
+
+def _zone_value(zone_times: list[int] | None, zone_idx: int) -> int:
+    if not zone_times or zone_idx >= len(zone_times):
+        return 0
+    return zone_times[zone_idx]
+
+
+def _time_and_percent(seconds: int, total_seconds: int) -> list[str]:
+    if seconds == 0 or total_seconds == 0:
+        return ["—", "—"]
+    return [format_zone_time(seconds), f"{round(seconds / total_seconds * 100)}%"]
+
+
+def _pace_zone_threshold(
+    zone_limits: list[float] | None,
+    zone_idx: int,
+    threshold_mps: float | None,
     pace_unit: PaceUnit,
 ) -> str | None:
-    if not zone_times:
+    """Render the upper pace bound of one zone, or None when it has no bound.
+
+    The open-ended top zone (OPEN_PACE_ZONE_SENTINEL) and missing threshold/percentage
+    data both yield None so the caller drops the ``(<pace)`` suffix.
+    """
+    if not zone_limits or zone_idx >= len(zone_limits):
         return None
-    total = sum(zone_times)
-    if total == 0:
+    percent_of_threshold = zone_limits[zone_idx]
+    if (
+        percent_of_threshold is None
+        or percent_of_threshold == 0.0
+        or percent_of_threshold == OPEN_PACE_ZONE_SENTINEL
+        or not threshold_mps
+    ):
         return None
-    parts = []
-    for zone_idx, zone_time in enumerate(zone_times):
-        if zone_time == 0:
-            continue
-        pct = round(zone_time / total * 100)
-        mins = zone_time // 60
-        if (
-            zone_limits
-            and zone_idx < len(zone_limits)
-            and zone_limits[zone_idx] is not None
-            and zone_limits[zone_idx] != 0.0
-        ):
-            threshold_str = (
-                format_pace(1000, 1000 / zone_limits[zone_idx], pace_unit) or "?"
-            )
-            label = f"Z{zone_idx + 1} (<{threshold_str})"
-        else:
-            label = f"Z{zone_idx + 1}"
-        parts.append(f"{label}: {mins}min ({pct}%)")
-    return " | ".join(parts)
+    zone_upper_mps = threshold_mps * percent_of_threshold / 100
+    return format_pace(1000, 1000 / zone_upper_mps, pace_unit)
 
 
 def splits_table(
