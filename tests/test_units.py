@@ -1,5 +1,6 @@
 from intervals_sync.units import (
     PaceUnit,
+    UnitPreferences,
     UnitSystem,
     format_distance,
     format_elevation,
@@ -75,3 +76,54 @@ class TestFormatPace:
         assert format_pace(None, 3000, PaceUnit.MINS_KM) is None
         assert format_pace(10_000, None, PaceUnit.MINS_KM) is None
         assert format_pace(0, 3000, PaceUnit.MINS_KM) is None
+
+
+class TestUnitPreferencesFromAthlete:
+    def test_none_profile_defaults_to_metric(self) -> None:
+        prefs = UnitPreferences.from_athlete(None)
+        assert prefs.system is UnitSystem.METRIC
+        assert prefs.pace_by_type == {}
+
+    def test_imperial_measurement_preference(self) -> None:
+        prefs = UnitPreferences.from_athlete({"measurement_preference": "IMPERIAL"})
+        assert prefs.system is UnitSystem.IMPERIAL
+
+    def test_measurement_preference_is_case_insensitive(self) -> None:
+        prefs = UnitPreferences.from_athlete({"measurement_preference": "imperial"})
+        assert prefs.system is UnitSystem.IMPERIAL
+
+    def test_unknown_measurement_preference_defaults_metric(self) -> None:
+        prefs = UnitPreferences.from_athlete({"measurement_preference": "STONES"})
+        assert prefs.system is UnitSystem.METRIC
+
+    def test_expands_sport_settings_types(self) -> None:
+        profile = {
+            "measurement_preference": "IMPERIAL",
+            "sportSettings": [
+                {"types": ["Run", "TrailRun"], "pace_units": "MINS_MILE"},
+                {"types": ["Swim"], "pace_units": "SECS_100M"},
+            ],
+        }
+        prefs = UnitPreferences.from_athlete(profile)
+        assert prefs.pace_by_type["Run"] is PaceUnit.MINS_MILE
+        assert prefs.pace_by_type["TrailRun"] is PaceUnit.MINS_MILE
+        assert prefs.pace_by_type["Swim"] is PaceUnit.SECS_100M
+
+    def test_unknown_pace_units_string_is_skipped(self) -> None:
+        profile = {"sportSettings": [{"types": ["Run"], "pace_units": "FURLONGS"}]}
+        prefs = UnitPreferences.from_athlete(profile)
+        assert "Run" not in prefs.pace_by_type
+
+
+class TestPaceUnitFor:
+    def test_returns_configured_unit(self) -> None:
+        prefs = UnitPreferences(UnitSystem.METRIC, {"Run": PaceUnit.MINS_MILE})
+        assert prefs.pace_unit_for("Run") is PaceUnit.MINS_MILE
+
+    def test_metric_fallback_when_sport_missing(self) -> None:
+        prefs = UnitPreferences(UnitSystem.METRIC, {})
+        assert prefs.pace_unit_for("Run") is PaceUnit.MINS_KM
+
+    def test_imperial_fallback_when_sport_missing(self) -> None:
+        prefs = UnitPreferences(UnitSystem.IMPERIAL, {})
+        assert prefs.pace_unit_for("Run") is PaceUnit.MINS_MILE
