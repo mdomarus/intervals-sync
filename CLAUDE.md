@@ -46,7 +46,7 @@ src/intervals_sync/
 - **Disk is source of truth**: `scan_existing_notes()` reads `activity_id:` from YAML frontmatter of every existing note to detect renames and collisions — no separate index.
 - **Atomic writes**: `write_text_safe()` writes to `.{name}.tmp.{pid}` then `os.replace()` to avoid iCloud File Provider EPERM.
 - **Elevation**: DEM correction is explicitly disabled per activity so `total_elevation_gain` matches the device barometer (consistent with Strava/Garmin).
-- **Weather**: skipped for indoor types (`WeightTraining`, `Workout`, `VirtualRide`, `Swim`) and activities older than 92 days.
+- **Weather**: fetched at the activity's own location — the GPS point nearest its time middle, from the `latlng` stream (`fetch_activity_midpoint`). Skipped for indoor types (`WeightTraining`, `Workout`, `VirtualRide`, `Swim`), activities older than 92 days, and activities with no GPS fix (no weather rather than a wrong location).
 - **Type checker**: `ty` (Astral), not mypy. Ignore `.mypy_cache` if present.
 
 ## Git
