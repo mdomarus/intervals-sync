@@ -116,6 +116,9 @@ def activity_note(
     if race:
         lines.append("> 🏁 **RACE**\n")
 
+    if description:
+        lines += ["## Description", "", description, ""]
+
     lines += ["## Overview", ""]
     lines.extend(
         filter(
@@ -331,9 +334,6 @@ def activity_note(
         lines += ["", "## Intervals (auto-groups)", ""]
         for summary_item in interval_summary:
             lines.append(f"- {summary_item}")
-
-    if description:
-        lines += ["", "## Description", "", description]
 
     return "\n".join(lines)
 
