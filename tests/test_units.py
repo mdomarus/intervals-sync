@@ -60,6 +60,10 @@ class TestFormatPace:
         # 1000 m in 1050 s → 105 s per 100 m → 1:45 /100m
         assert format_pace(1000, 1050, PaceUnit.SECS_100M) == "1:45 /100m"
 
+    def test_secs_100y(self) -> None:
+        # 1000 m in 1050 s → 1050 / (1000/91.44) ≈ 96 s per 100 y → 1:36 /100y
+        assert format_pace(1000, 1050, PaceUnit.SECS_100Y) == "1:36 /100y"
+
     def test_secs_500m(self) -> None:
         # 2000 m in 480 s → 120 s per 500 m → 2:00 /500m
         assert format_pace(2000, 480, PaceUnit.SECS_500M) == "2:00 /500m"
