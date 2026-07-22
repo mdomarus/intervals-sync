@@ -85,6 +85,10 @@ class WellnessDay(TypedDict, total=False):
     atl: float
     atlLoad: float
     rampRate: float
+    sleepSecs: float
+    sleepQuality: float
+    hrv: float
+    restingHR: float
 
 
 WellnessSeries = list[WellnessDay]

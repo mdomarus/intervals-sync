@@ -14,7 +14,7 @@ from .formatters import (
     sanitize_filename,
     splits_table,
 )
-from .load_metrics import load_section_lines
+from .load_metrics import load_section_lines, wellness_section_lines
 from .state import Activity, WellnessSeries
 from .units import (
     UnitPreferences,
@@ -482,6 +482,7 @@ def week_summary(
         lines.append(f"- **TSB (freshness):** {tsb} ({tsb_label})")
 
     lines += load_section_lines(wellness_series, year, week_num)
+    lines += wellness_section_lines(wellness_series, year, week_num)
 
     lines += ["", "## By type", ""]
     for activity_type, stats in sorted(by_type.items()):

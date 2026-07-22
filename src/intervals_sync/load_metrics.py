@@ -262,3 +262,116 @@ def load_section_lines(
     if rows:
         lines += _trend_table_lines(rows)
     return lines
+
+
+def _format_sleep(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    return f"{hours}h {minutes:02d}m"
+
+
+def _format_sleep_quality(quality: float | None) -> str:
+    if quality is None:
+        return "—"
+    q_val = int(quality)
+    if q_val <= 5:
+        return f"{q_val}/5"
+    return f"{q_val}/100"
+
+
+def wellness_section_lines(
+    series: WellnessSeries | None, year: int, week_num: int
+) -> list[str]:
+    """Markdown lines for the '## Sleep & Recovery' section, or [] when nothing to show."""
+    if not series:
+        return []
+
+    week_days: list[dict] = []
+    has_any_data = False
+
+    # Calculate weekly average HRV for comparison
+    hrv_values = [row.get("hrv") for row in series if row.get("hrv") is not None]
+    avg_hrv = mean(hrv_values) if hrv_values else None
+
+    for iso_weekday in range(1, 8):
+        day_date = date.fromisocalendar(year, week_num, iso_weekday)
+        day_iso = day_date.isoformat()
+
+        row = next((r for r in series if r.get("id") == day_iso), None)
+
+        day_data = {
+            "date": day_iso,
+            "weekday_name": day_date.strftime("%a"),
+            "sleep": None,
+            "quality": None,
+            "hrv": None,
+            "rhr": None,
+            "status": "🟢 OK",
+        }
+
+        if row:
+            sleep = row.get("sleepSecs")
+            quality = row.get("sleepQuality")
+            hrv = row.get("hrv")
+            rhr = row.get("restingHR")
+
+            day_data["sleep"] = sleep
+            day_data["quality"] = quality
+            day_data["hrv"] = hrv
+            day_data["rhr"] = rhr
+
+            if (
+                sleep is not None
+                or quality is not None
+                or hrv is not None
+                or rhr is not None
+            ):
+                has_any_data = True
+
+            status_parts = []
+            if sleep is not None:
+                if sleep < 6 * 3600:
+                    status_parts.append("⚠️ Ryzyko (sen < 6h)")
+                elif sleep < 6.5 * 3600:
+                    status_parts.append("🟡 Deficyt snu")
+
+            if hrv is not None and avg_hrv is not None and hrv < avg_hrv * 0.9:
+                status_parts.append("📉 Niskie HRV")
+
+            if not status_parts:
+                if sleep is not None or hrv is not None:
+                    day_data["status"] = "🟢 Regeneracja"
+                else:
+                    day_data["status"] = "—"
+            else:
+                day_data["status"] = " · ".join(status_parts)
+
+        week_days.append(day_data)
+
+    if not has_any_data:
+        return []
+
+    lines = [
+        "",
+        "## Sleep & Recovery",
+        "",
+        "| Day | Sleep | Quality | HRV | restingHR | Status / Risk |",
+        "|-----|-------|---------|-----|-----------|---------------|",
+    ]
+
+    for d in week_days:
+        sleep_str = _format_sleep(d["sleep"])
+        quality_str = _format_sleep_quality(d["quality"])
+        hrv_str = str(int(d["hrv"])) if d["hrv"] is not None else "—"
+        rhr_str = str(int(d["rhr"])) if d["rhr"] is not None else "—"
+
+        day_date = date.fromisoformat(d["date"])
+        date_label = f"{d['weekday_name']} ({day_date.strftime('%d.%m')})"
+
+        lines.append(
+            f"| {date_label} | {sleep_str} | {quality_str} | {hrv_str} | {rhr_str} | {d['status']} |"
+        )
+
+    return lines
